@@ -1,0 +1,2703 @@
+<!DOCTYPE html>
+<html lang="ру">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Interface</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Библиотеки для обработки файлов -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+
+    <!-- Библиотека для подсветки синтаксиса кода -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <!-- Библиотеки для экспорта в PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --secondary: #f3f4f6;
+            --text: #1f2937;
+            --light: #f9fafb;
+            --border: #e5e7eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --code-bg: #2d3748;
+            --code-text: #e2e8f0;
+            --quote-bg: rgba(79, 70, 229, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--light);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        /* Значения бегунков: крупнее и жирные */
+        .value-badge {
+            font-weight: 700;
+            font-size: 1.05rem;
+            margin-left: 8px;
+            color: var(--primary-dark);
+        }
+        .form-group small {
+            display: block;
+            color: #666;
+            margin-top: 6px;
+            line-height: 1.45;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--primary-dark);
+        }
+
+        button:disabled {
+            background-color: #a5b4fc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background-color: #e5e7eb;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        .btn-success {
+            background-color: var(--success);
+        }
+
+        .btn-success:hover {
+            background-color: #059669;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .chat-container {
+            height: 70vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            position: relative;
+            padding-right: 48px; /* запас под кнопку действий */
+        }
+
+        .user-message {
+            background-color: var(--secondary);
+            align-self: flex-end;
+            margin-left: 50px;
+        }
+
+        .assistant-message {
+            background-color: white;
+            border: 1px solid var(--border);
+            margin-right: 50px;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .message-actions {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message-actions button {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 16px;
+            margin-left: 5px;
+        }
+
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+        }
+
+        .chat-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: var(--success);
+            color: white;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateX(150%);
+            transition: transform 0.3s ease-out;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.error {
+            background-color: var(--danger);
+        }
+
+        .notification.info {
+            background-color: #3b82f6;
+        }
+
+        .settings-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .settings-section h2 {
+            margin-bottom: 15px;
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .typing-indicator {
+            display: flex;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            width: fit-content;
+        }
+
+        .typing-indicator span {
+            height: 10px;
+            width: 10px;
+            background-color: #9e9e9e;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+
+        /* Стили для загруженных файлов */
+        .uploaded-files {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: none;
+        }
+
+        .uploaded-files.active {
+            display: block;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-icon {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .file-name {
+            font-weight: 600;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .remove-file {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        /* Стили для сообщений с файлами */
+        .message.user-message.isFile {
+            background-color: rgba(79, 70, 229, 0.05);
+            border-left: 4px solid var(--primary);
+        }
+
+        .message.user-message.isFile .message-header {
+            color: var(--primary);
+        }
+
+        /* Стили для цитат */
+        .message-content blockquote {
+            border-left: 4px solid var(--primary);
+            padding-left: 16px;
+            margin: 16px 0;
+            font-style: italic;
+            color: #555;
+            background-color: var(--quote-bg);
+            border-radius: 0 6px 6px 0;
+        }
+
+        /* Стили для блоков кода */
+        .message-content pre {
+            background-color: var(--code-bg);
+            color: var(--code-text);
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-family: 'Courier New', Courier, monospace;
+            position: relative;
+        }
+
+        .message-content pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+            display: block;
+        }
+
+        /* Перенос длинных слов/чисел внутри сообщений */
+        .message-content {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        /* Отступы списков, чтобы маркеры не упирались в левую границу */
+        .message-content ul,
+        .message-content ol {
+            padding-left: 1.25rem;
+            margin-left: 0.25rem;
+            list-style-position: outside;
+        }
+
+        /* Списки внутри цитат — немного больше отступа из-за левой рамки */
+        .message-content blockquote ul,
+        .message-content blockquote ol {
+            padding-left: 1.5rem;
+            margin-left: 0.25rem;
+        }
+
+        /* Стили для встроенного кода */
+        .message-content code {
+            background-color: rgba(79, 70, 229, 0.1);
+            color: var(--primary-dark);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+
+        /* Кнопка копирования для блоков кода */
+        .message-content pre::after {
+            content: 'Копировать';
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .message-content pre:hover::after {
+            opacity: 1;
+        }
+
+        /* Стили для подсветки синтаксиса */
+        .message-content pre code.hljs {
+            background-color: transparent;
+            color: inherit;
+        }
+
+
+
+        /* Модальное окно для управления чатами */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: var(--primary);
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+        }
+
+        .modal-footer {
+            margin-top: 20px;
+            text-align: right;
+        }
+
+        /* Стили для списка сохраненных чатов */
+        .saved-chat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .saved-chat-item:last-child {
+            border-bottom: none;
+        }
+
+        .saved-chat-info {
+            flex: 1;
+        }
+
+        .saved-chat-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .saved-chat-date {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .saved-chat-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .message {
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+            
+            .chat-controls {
+                flex-direction: column;
+            }
+            
+            .chat-controls button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Страница 1: Настройки модели -->
+        <div id="page1" class="page active">
+            <h1>Настройки модели</h1>
+            <form id="model-settings-form">
+                <div class="form-group">
+                    <label for="model-url">URL модели</label>
+                    <input type="text" id="model-url" placeholder="https://api.openai.com/v1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="model-name">Название модели</label>
+                    <input type="text" id="model-name" placeholder="gpt-3.5-turbo" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="api-key">API ключ</label>
+                    <input type="password" id="api-key" placeholder="sk-..." required>
+                </div>
+                
+                <button type="submit">Сохранить и продолжить</button>
+            </form>
+        </div>
+
+        <!-- Страница 2: Настройки системного промпта -->
+        <div id="page2" class="page">
+            <h1>Настройки системного промпта</h1>
+            
+            <div class="tabs">
+                <div class="tab active" data-tab="general">Общие</div>
+                <div class="tab" data-tab="behavior">Поведение</div>
+                <div class="tab" data-tab="format">Форматирование</div>
+                <div class="tab" data-tab="restrictions">Ограничения</div>
+            </div>
+            
+            <div id="general-tab" class="tab-content active">
+                <div class="settings-section">
+                    <h2>Основная информация</h2>
+                    <div class="form-group">
+                        <label for="assistant-name">Имя ассистента</label>
+                        <input type="text" id="assistant-name" placeholder="AI Assistant">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="assistant-description">Описание ассистента</label>
+                        <textarea id="assistant-description" rows="3" placeholder="Краткое описание возможностей ассистента"></textarea>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h2>Системный промпт</h2>
+                    <div class="form-group">
+                        <label for="system-prompt">Основной системный промпт</label>
+                        <textarea id="system-prompt" rows="8" placeholder="Ты полезный ассистент..."></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="behavior-tab" class="tab-content">
+                <div class="settings-section">
+                    <h2>Поведенческие настройки</h2>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="creativity">Креативность (0-1) — управляет температурой генерации (temperature)</label>
+                            <input type="range" id="creativity" min="0" max="1" step="0.1" value="0.7">
+                            <span id="creativity-value" class="value-badge">0.7</span>
+                            <small>Выше — разнообразнее и креативнее ответы; ниже — стабильнее и предсказуемее.</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="formality">Формальность (0-1) — влияет на стиль: разговорный ↔ деловой</label>
+                            <input type="range" id="formality" min="0" max="1" step="0.1" value="0.5">
+                            <span id="formality-value" class="value-badge">0.5</span>
+                            <small>0 — максимально неформально; 1 — максимально официально.</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="verbosity">Детализация ответов (0-1) — глубина и развернутость</label>
+                            <input type="range" id="verbosity" min="0" max="1" step="0.1" value="0.7">
+                            <span id="verbosity-value" class="value-badge">0.7</span>
+                            <small>Меньше — кратко, по делу. Больше — подробнее, с нюансами.</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="humor">Чувство юмора (0-1) — доля лёгкости в ответах</label>
+                            <input type="range" id="humor" min="0" max="1" step="0.1" value="0.3">
+                            <span id="humor-value" class="value-badge">0.3</span>
+                            <small>Поднимайте аккуратно для серьёзных тем.</small>
+                        </div>
+                        
+                        <!-- Новая настройка скорости вывода -->
+                        <div class="form-group">
+                            <label for="typing-speed">Скорость вывода (символов/сек)</label>
+                            <input type="range" id="typing-speed" min="10" max="100" step="5" value="30">
+                            <span id="typing-speed-value" class="value-badge">30</span>
+                            <small>Управляет скоростью «печати» при стриме.</small>
+                        </div>
+                        
+                        <!-- Продвинутые параметры генерации -->
+                        <div class="form-group">
+                            <label for="top-p">Top-p (ядро выборки)</label>
+                            <input type="range" id="top-p" min="0" max="1" step="0.05" value="1">
+                            <span id="top-p-value" class="value-badge">1</span>
+                            <small>Доля совокупной вероятности, из которой выбираются токены. 1 — эквивалентно «выкл».</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="frequency-penalty">Штраф за повторение (frequency_penalty)</label>
+                            <input type="range" id="frequency-penalty" min="-2" max="2" step="0.1" value="0">
+                            <span id="frequency-penalty-value" class="value-badge">0</span>
+                            <small>Положительные значения уменьшают повторы; отрицательные — поощряют.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="presence-penalty">Штраф за присутствие (presence_penalty)</label>
+                            <input type="range" id="presence-penalty" min="-2" max="2" step="0.1" value="0">
+                            <span id="presence-penalty-value" class="value-badge">0</span>
+                            <small>Положительные значения стимулируют ввод новых тем.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="seed">Seed (сид)</label>
+                            <input type="number" id="seed" placeholder="например, 42">
+                            <small>Фиксирует случайность для повторяемости (если поддерживается сервером).</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h2>Поведенческие переключатели</h2>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Использовать эмодзи</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="use-emojis" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Задавать уточняющие вопросы</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="ask-clarifying">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Предоставлять примеры</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="provide-examples">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Использовать списки</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="use-lists" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="format-tab" class="tab-content">
+                <div class="settings-section">
+                    <h2>Настройки форматирования</h2>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Использовать Markdown</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="use-markdown" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Выделять ключевые моменты</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="highlight-key-points">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Использовать таблицы</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="use-tables">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Добавлять разделители</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="add-separators">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h2>Структура ответа</h2>
+                    <div class="form-group">
+                        <label for="response-structure">Предпочтительная структура ответа</label>
+                        <select id="response-structure">
+                            <option value="paragraph">Абзацы</option>
+                            <option value="list">Списки</option>
+                            <option value="mixed">Смешанная</option>
+                        </select>
+                        <small>Рекомендуемый формат вывода: единый абзац, списки или смешанный.</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="max-response-length">Максимальная длина ответа (токенов)</label>
+                        <input type="number" id="max-response-length" min="100" max="4000" value="1000">
+                        <small>Эквивалент max_tokens в плейграунде: ограничивает длину вывода.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="stop-sequences">Стоп-строки (stop)</label>
+                        <input type="text" id="stop-sequences" placeholder="Напр.: ###, END, \n\n">
+                        <small>Перечень стоп-строк через запятую. При появлении любой генерация остановится.</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="restrictions-tab" class="tab-content">
+                <div class="settings-section">
+                    <h2>Ограничения контента</h2>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Запретить обсуждение политики</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="no-politics">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Запретить обсуждение религии</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="no-religion">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Запретить нецензурную лексику</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="no-profanity" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Запретить медицинские советы</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="no-medical-advice" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h2>Дополнительные ограничения</h2>
+                    <div class="form-group">
+                        <label for="custom-restrictions">Дополнительные ограничения</label>
+                        <textarea id="custom-restrictions" rows="4" placeholder="Любые дополнительные ограничения или указания..."></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="go-to-models" class="btn-secondary">К выбору модели</button>
+                <button id="save-settings" class="btn-success">Сохранить настройки</button>
+                <button id="reset-settings" class="btn-danger">Сбросить настройки</button>
+                <button id="go-to-chat" class="btn-secondary">Перейти к чату</button>
+            </div>
+        </div>
+
+        <!-- Страница 3: Чат -->
+        <div id="page3" class="page">
+            <h1>Чат с моделью</h1>
+            
+            <div class="chat-controls">
+                <button id="new-chat" class="btn-secondary">Новый чат</button>
+                <button id="clear-chat" class="btn-danger">Очистить чат</button>
+                <button id="export-chat" class="btn-secondary">Экспорт чата (Markdown)</button>
+                <button id="export-word" class="btn-secondary"><i class="fas fa-file-word"></i> Экспорт в Word (.doc)</button>
+                <button id="export-txt" class="btn-secondary"><i class="fas fa-file-alt"></i> Экспорт в TXT</button>
+                <button id="export-pdf" class="btn-secondary"><i class="fas fa-file-pdf"></i> Экспорт в PDF</button>
+                <button id="upload-file" class="btn-secondary">Загрузить документ</button>
+                <button id="save-chat" class="btn-secondary"><i class="fas fa-save"></i> Сохранить чат</button>
+                <button id="load-chat" class="btn-secondary"><i class="fas fa-folder-open"></i> Загрузить чат</button>
+                <button id="settings-btn" class="btn-secondary"><i class="fas fa-cog"></i> Настройки</button>
+                <button id="back-to-models" class="btn-secondary"><i class="fas fa-arrow-left"></i> К выбору модели</button>
+                <input type="file" id="file-input" style="display: none;" accept=".pdf,.docx,.txt,.xlsx,.xls">
+            </div>
+            
+            <div id="uploaded-files" class="uploaded-files"></div>
+            
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages">
+                    <div class="message assistant-message">
+                        <div class="message-header">
+                            <span>AI Assistant</span>
+                            <span class="message-time"></span>
+                        </div>
+                        <div class="message-content">
+                            <p>Привет! Я твой AI ассистент. Чем могу помочь?</p>
+                        </div>
+                        <div class="message-actions">
+                            <button class="copy-btn" title="Копировать"><i class="fas fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chat-input-container">
+                    <textarea id="chat-input" class="chat-input" placeholder="Введите ваше сообщение..." rows="2"></textarea>
+                    <button id="send-btn" class="btn-success">Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Модальное окно для управления сохраненными чатами -->
+    <div id="chat-manager-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Управление чатами</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="saved-chats-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="close-chat-manager" class="btn-secondary">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+        // Настройка pdf.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        // Глобальные переменные
+        let modelSettings = {
+            url: '',
+            name: '',
+            apiKey: ''
+        };
+
+        let systemPromptSettings = {
+            assistantName: 'AI Assistant',
+            assistantDescription: '',
+            systemPrompt: 'Ты полезный ассистент, который отвечает на вопросы пользователей.',
+            creativity: 0.7,
+            formality: 0.5,
+            verbosity: 0.7,
+            humor: 0.3,
+            topP: 1.0,
+            frequencyPenalty: 0,
+            presencePenalty: 0,
+            stopSequences: '',
+            seed: '',
+            useEmojis: true,
+            askClarifying: false,
+            provideExamples: false,
+            useLists: true,
+            useMarkdown: true,
+            highlightKeyPoints: false,
+            useTables: false,
+            addSeparators: false,
+            responseStructure: 'paragraph',
+            maxResponseLength: 1000,
+            noPolitics: false,
+            noReligion: false,
+            noProfanity: true,
+            noMedicalAdvice: true,
+            customRestrictions: '',
+            typingSpeed: 30 // Новая настройка скорости вывода
+        };
+
+        let chatHistory = [
+            {
+                role: 'assistant',
+                content: 'Привет! Я твой AI ассистент. Чем могу помочь?',
+                timestamp: new Date()
+            }
+        ];
+
+        let uploadedFiles = [];
+        let currentTyper = null; // Для текущего экземпляра SmoothTyper
+
+        // Класс для плавного вывода текста (посимвольный вывод)
+        class SmoothTyper {
+            constructor(element, charsPerSecond = 30, useMarkdown = false) {
+                this.element = element;
+                this.charsPerSecond = charsPerSecond;
+                this.useMarkdown = useMarkdown;
+                this.queue = []; // Очередь символов для вывода
+                this.isTyping = false;
+                this.intervalId = null;
+                this.interval = 1000 / charsPerSecond; // Интервал в миллисекундах
+                this.fullText = ''; // Полный текст, пришедший от модели
+                this.displayedLength = 0; // Сколько символов уже показано
+                this.lastRenderTime = 0; // Для троттлинга отрисовки Markdown
+                this.renderThrottleMs = 30; // Порог обновления Markdown (быстрее для меньшего мерцания)
+                this.doneResolver = null;
+                this.donePromise = new Promise((resolve) => { this.doneResolver = resolve; });
+            }
+
+            addText(text) {
+                for (let i = 0; i < text.length; i++) {
+                    this.queue.push(text[i]);
+                }
+                this.fullText += text;
+
+                if (!this.isTyping) {
+                    this.startTyping();
+                }
+            }
+
+            startTyping() {
+                if (this.isTyping) return;
+                this.isTyping = true;
+
+                this.intervalId = setInterval(() => {
+                    if (this.queue.length === 0) {
+                        this.stopTyping();
+                        return;
+                    }
+
+                    // Достаем по одному символу
+                    this.queue.shift();
+                    this.displayedLength += 1;
+                    const justAddedChar = this.fullText.charAt(this.displayedLength - 1);
+
+                    if (this.useMarkdown) {
+                        const now = performance.now();
+                        const isMdTrigger = this.queue.length === 0 || justAddedChar === '\n' || justAddedChar === ' ' || '*_`#-'.includes(justAddedChar);
+                        if (now - this.lastRenderTime >= this.renderThrottleMs || isMdTrigger) {
+                            const partial = this.fullText.slice(0, this.displayedLength);
+                            this.element.innerHTML = marked.parse(partial);
+                            this.element.querySelectorAll('pre code').forEach((block) => {
+                                hljs.highlightElement(block);
+                            });
+                            this.lastRenderTime = now;
+                            autoScrollChat();
+                        }
+                    } else {
+                        // Обычный текст без Markdown
+                        const nextChar = this.fullText.charAt(this.displayedLength - 1);
+                        this.element.textContent += nextChar;
+                        autoScrollChat();
+                    }
+                }, this.interval);
+            }
+
+            stopTyping() {
+                if (this.intervalId) {
+                    clearInterval(this.intervalId);
+                    this.intervalId = null;
+                }
+                this.isTyping = false;
+
+                // Финальный рендер Markdown на весь текст
+                if (this.useMarkdown) {
+                    const htmlContent = marked.parse(this.fullText.slice(0, this.displayedLength));
+                    this.element.innerHTML = htmlContent;
+                    this.element.querySelectorAll('pre code').forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+                }
+
+                autoScrollChat(true);
+                if (this.doneResolver) this.doneResolver();
+            }
+
+            // Принудительная остановка с немедленной финальной отрисовкой
+            stop() {
+                if (this.intervalId) {
+                    clearInterval(this.intervalId);
+                    this.intervalId = null;
+                }
+                // Показать весь текст
+                this.displayedLength = this.fullText.length;
+                this.isTyping = false;
+
+                if (this.useMarkdown) {
+                    const htmlContent = marked.parse(this.fullText);
+                    this.element.innerHTML = htmlContent;
+                    this.element.querySelectorAll('pre code').forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+                } else {
+                    this.element.textContent = this.fullText;
+                }
+
+                autoScrollChat(true);
+                if (this.doneResolver) this.doneResolver();
+            }
+
+            // Дождаться естественного завершения анимации печати
+            waitUntilDone() {
+                return this.donePromise;
+            }
+
+            // Запросить мягкое завершение без мгновенного «слива» буфера
+            finish() {
+                // Ничего специального не делаем: очередь опустеет и stopTyping вызовется сама
+                // Этот метод оставлен для явной семантики в вызывающем коде
+            }
+        }
+
+        // Автопрокрутка чата к низу, если пользователь недалеко от низа
+        function autoScrollChat(force = false) {
+            const container = document.getElementById('chat-messages');
+            if (!container) return;
+            const threshold = 80; // px
+            const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            const isNearBottom = distanceFromBottom <= threshold;
+            if (force || isNearBottom) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        // Инициализация приложения
+        document.addEventListener('DOMContentLoaded', () => {
+            // Загрузка сохраненных настроек
+            loadSettings();
+            
+            // Настройка обработчиков событий
+            setupEventListeners();
+            
+            // Обновление значений слайдеров
+            updateSliderValues();
+        });
+
+        // Настройка обработчиков событий
+        function setupEventListeners() {
+            console.log('Настройка обработчиков событий...');
+            
+            try {
+                // Страница 1: Форма настроек модели
+                const modelForm = document.getElementById('model-settings-form');
+                if (modelForm) {
+                    modelForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        saveModelSettings();
+                        showPage(2);
+                    });
+                }
+                
+                // Страница 2: Вкладки
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        const tabName = tab.getAttribute('data-tab');
+                        openTab(tabName);
+                    });
+                });
+                
+                // Страница 2: Кнопки
+                const saveSettingsBtn = document.getElementById('save-settings');
+                if (saveSettingsBtn) {
+                    saveSettingsBtn.addEventListener('click', saveSystemPromptSettings);
+                }
+                
+                const resetSettingsBtn = document.getElementById('reset-settings');
+                if (resetSettingsBtn) {
+                    resetSettingsBtn.addEventListener('click', resetSystemPromptSettings);
+                }
+                
+                const goToChatBtn = document.getElementById('go-to-chat');
+                if (goToChatBtn) {
+                    goToChatBtn.addEventListener('click', () => {
+                        saveSystemPromptSettings();
+                        showPage(3);
+                        renderChatHistory();
+                    });
+                }
+                
+                const goToModelsBtn = document.getElementById('go-to-models');
+                if (goToModelsBtn) {
+                    goToModelsBtn.addEventListener('click', () => {
+                        showPage(1);
+                    });
+                }
+                
+                // Страница 3: Чат
+                const sendBtn = document.getElementById('send-btn');
+                if (sendBtn) {
+                    sendBtn.addEventListener('click', sendMessage);
+                }
+                
+                const chatInput = document.getElementById('chat-input');
+                if (chatInput) {
+                    chatInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    });
+                }
+                
+                // Остальные кнопки чата
+                const newChatBtn = document.getElementById('new-chat');
+                if (newChatBtn) {
+                    newChatBtn.addEventListener('click', startNewChat);
+                }
+                
+                const clearChatBtn = document.getElementById('clear-chat');
+                if (clearChatBtn) {
+                    clearChatBtn.addEventListener('click', clearChat);
+                }
+                
+                const exportChatBtn = document.getElementById('export-chat');
+                if (exportChatBtn) {
+                    exportChatBtn.addEventListener('click', exportChat);
+                }
+                
+                const exportWordBtn = document.getElementById('export-word');
+                if (exportWordBtn) {
+                    exportWordBtn.addEventListener('click', exportToWord);
+                }
+                
+                const exportTxtBtn = document.getElementById('export-txt');
+                if (exportTxtBtn) {
+                    exportTxtBtn.addEventListener('click', exportToTxt);
+                }
+                
+                const exportPdfBtn = document.getElementById('export-pdf');
+                if (exportPdfBtn && typeof exportToPDF === 'function') {
+                    exportPdfBtn.addEventListener('click', exportToPDF);
+                }
+                
+                // Кнопка настроек
+                const settingsBtn = document.getElementById('settings-btn');
+                if (settingsBtn) {
+                    settingsBtn.addEventListener('click', () => {
+                        if (confirm('Вернуться к настройкам? Текущий чат будет сохранен.')) {
+                            showPage(2);
+                        }
+                    });
+                }
+                
+                // Кнопка возврата к выбору модели из чата
+                const backToModelsBtn = document.getElementById('back-to-models');
+                if (backToModelsBtn) {
+                    backToModelsBtn.addEventListener('click', () => {
+                        if (confirm('Вернуться к выбору модели? Текущий чат останется без изменений.')) {
+                            showPage(1);
+                        }
+                    });
+                }
+                
+                // Загрузка файлов
+                const uploadFileBtn = document.getElementById('upload-file');
+                if (uploadFileBtn) {
+                    uploadFileBtn.addEventListener('click', () => {
+                        const fileInput = document.getElementById('file-input');
+                        if (fileInput) fileInput.click();
+                    });
+                }
+                
+                const fileInput = document.getElementById('file-input');
+                if (fileInput) {
+                    fileInput.addEventListener('change', handleFileUpload);
+                }
+                
+                // Делегирование событий для кнопок копирования
+                const chatMessages = document.getElementById('chat-messages');
+                if (chatMessages) {
+                    chatMessages.addEventListener('click', (e) => {
+                        if (e.target.closest('.copy-btn')) {
+                            const messageElement = e.target.closest('.message');
+                            const content = messageElement.querySelector('.message-content').innerText;
+                            copyToClipboard(content);
+                        }
+                    });
+                }
+                
+                // Кнопки управления чатами
+                const saveChatBtn = document.getElementById('save-chat');
+                if (saveChatBtn) {
+                    saveChatBtn.addEventListener('click', saveCurrentChat);
+                }
+                
+                const loadChatBtn = document.getElementById('load-chat');
+                if (loadChatBtn) {
+                    loadChatBtn.addEventListener('click', openChatManagerModal);
+                }
+                
+                const closeChatManagerBtn = document.getElementById('close-chat-manager');
+                if (closeChatManagerBtn) {
+                    closeChatManagerBtn.addEventListener('click', closeChatManagerModal);
+                }
+                
+                const closeModalBtn = document.querySelector('#chat-manager-modal .close');
+                if (closeModalBtn) {
+                    closeModalBtn.addEventListener('click', closeChatManagerModal);
+                }
+                
+                // Закрытие модального окна при клике вне его
+                window.addEventListener('click', (event) => {
+                    const modal = document.getElementById('chat-manager-modal');
+                    if (event.target === modal) {
+                        closeChatManagerModal();
+                    }
+                });
+                
+                console.log('Обработчики событий настроены успешно');
+            } catch (error) {
+                console.error('Ошибка при настройке обработчиков событий:', error);
+            }
+        }
+
+        // Функции навигации
+        function showPage(pageNumber) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(`page${pageNumber}`).classList.add('active');
+        }
+
+        // Функции для страницы 1
+        function saveModelSettings() {
+            modelSettings.url = document.getElementById('model-url').value;
+            modelSettings.name = document.getElementById('model-name').value;
+            modelSettings.apiKey = document.getElementById('api-key').value;
+            
+            localStorage.setItem('modelSettings', JSON.stringify(modelSettings));
+            showNotification('Настройки модели сохранены!');
+        }
+
+        // Функции для страницы 2
+        function openTab(tabName) {
+            // Скрыть все вкладки
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Убрать активный класс со всех вкладок
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Показать выбранную вкладку
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            // Добавить активный класс к выбранной вкладке
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        }
+
+        function updateSliderValues() {
+            // Обновление отображаемых значений слайдеров
+            document.getElementById('creativity').addEventListener('input', (e) => {
+                document.getElementById('creativity-value').textContent = e.target.value;
+            });
+            
+            document.getElementById('formality').addEventListener('input', (e) => {
+                document.getElementById('formality-value').textContent = e.target.value;
+            });
+            
+            document.getElementById('verbosity').addEventListener('input', (e) => {
+                document.getElementById('verbosity-value').textContent = e.target.value;
+            });
+            
+            document.getElementById('humor').addEventListener('input', (e) => {
+                document.getElementById('humor-value').textContent = e.target.value;
+            });
+            
+            // Новый слайдер для скорости вывода
+            document.getElementById('typing-speed').addEventListener('input', (e) => {
+                document.getElementById('typing-speed-value').textContent = e.target.value;
+            });
+
+            // Продвинутые параметры
+            const topPRange = document.getElementById('top-p');
+            if (topPRange) {
+                topPRange.addEventListener('input', (e) => {
+                    document.getElementById('top-p-value').textContent = e.target.value;
+                });
+            }
+            const freq = document.getElementById('frequency-penalty');
+            if (freq) {
+                freq.addEventListener('input', (e) => {
+                    document.getElementById('frequency-penalty-value').textContent = e.target.value;
+                });
+            }
+            const pres = document.getElementById('presence-penalty');
+            if (pres) {
+                pres.addEventListener('input', (e) => {
+                    document.getElementById('presence-penalty-value').textContent = e.target.value;
+                });
+            }
+        }
+
+        function saveSystemPromptSettings() {
+            // Общие настройки
+            systemPromptSettings.assistantName = document.getElementById('assistant-name').value;
+            systemPromptSettings.assistantDescription = document.getElementById('assistant-description').value;
+            systemPromptSettings.systemPrompt = document.getElementById('system-prompt').value;
+            
+            // Поведенческие настройки
+            systemPromptSettings.creativity = parseFloat(document.getElementById('creativity').value);
+            systemPromptSettings.formality = parseFloat(document.getElementById('formality').value);
+            systemPromptSettings.verbosity = parseFloat(document.getElementById('verbosity').value);
+            systemPromptSettings.humor = parseFloat(document.getElementById('humor').value);
+            // Продвинутые параметры
+            const topPEl = document.getElementById('top-p');
+            if (topPEl) systemPromptSettings.topP = parseFloat(topPEl.value);
+            const freqEl = document.getElementById('frequency-penalty');
+            if (freqEl) systemPromptSettings.frequencyPenalty = parseFloat(freqEl.value);
+            const presEl = document.getElementById('presence-penalty');
+            if (presEl) systemPromptSettings.presencePenalty = parseFloat(presEl.value);
+            const seedEl = document.getElementById('seed');
+            if (seedEl) systemPromptSettings.seed = seedEl.value.trim();
+            
+            // Скорость вывода
+            systemPromptSettings.typingSpeed = parseInt(document.getElementById('typing-speed').value);
+            
+            // Переключатели
+            systemPromptSettings.useEmojis = document.getElementById('use-emojis').checked;
+            systemPromptSettings.askClarifying = document.getElementById('ask-clarifying').checked;
+            systemPromptSettings.provideExamples = document.getElementById('provide-examples').checked;
+            systemPromptSettings.useLists = document.getElementById('use-lists').checked;
+            
+            // Форматирование
+            systemPromptSettings.useMarkdown = document.getElementById('use-markdown').checked;
+            systemPromptSettings.highlightKeyPoints = document.getElementById('highlight-key-points').checked;
+            systemPromptSettings.useTables = document.getElementById('use-tables').checked;
+            systemPromptSettings.addSeparators = document.getElementById('add-separators').checked;
+            
+            // Структура ответа
+            systemPromptSettings.responseStructure = document.getElementById('response-structure').value;
+            systemPromptSettings.maxResponseLength = parseInt(document.getElementById('max-response-length').value);
+            const stopEl = document.getElementById('stop-sequences');
+            if (stopEl) systemPromptSettings.stopSequences = stopEl.value;
+            
+            // Ограничения
+            systemPromptSettings.noPolitics = document.getElementById('no-politics').checked;
+            systemPromptSettings.noReligion = document.getElementById('no-religion').checked;
+            systemPromptSettings.noProfanity = document.getElementById('no-profanity').checked;
+            systemPromptSettings.noMedicalAdvice = document.getElementById('no-medical-advice').checked;
+            systemPromptSettings.customRestrictions = document.getElementById('custom-restrictions').value;
+            
+            localStorage.setItem('systemPromptSettings', JSON.stringify(systemPromptSettings));
+            showNotification('Настройки системного промпта сохранены!');
+        }
+
+        function resetSystemPromptSettings() {
+            if (confirm('Вы уверены, что хотите сбросить все настройки системного промпта?')) {
+                localStorage.removeItem('systemPromptSettings');
+                
+                // Сброс значения скорости вывода
+                document.getElementById('typing-speed').value = 30;
+                document.getElementById('typing-speed-value').textContent = 30;
+                
+                location.reload();
+            }
+        }
+
+        // Функции для страницы 3
+        function renderChatHistory() {
+            const chatMessagesContainer = document.getElementById('chat-messages');
+            chatMessagesContainer.innerHTML = '';
+            
+            chatHistory.forEach(message => {
+                const messageElement = createMessageElement(message);
+                chatMessagesContainer.appendChild(messageElement);
+            });
+            
+            // Применяем подсветку синтаксиса ко всем блокам кода
+            document.querySelectorAll('.message-content pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+            
+            // Прокрутка к последнему сообщению
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+        }
+
+        function createMessageElement(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            
+            if (message.role === 'user') {
+                messageDiv.classList.add('user-message');
+                if (message.isFile) {
+                    messageDiv.classList.add('isFile');
+                }
+            } else {
+                messageDiv.classList.add('assistant-message');
+            }
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.classList.add('message-header');
+            
+            const roleSpan = document.createElement('span');
+            roleSpan.textContent = message.role === 'user' ? 'Вы' : systemPromptSettings.assistantName;
+            if (message.isFile) {
+                roleSpan.innerHTML = '<i class="fas fa-file"></i> ' + roleSpan.textContent;
+            }
+            headerDiv.appendChild(roleSpan);
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.classList.add('message-time');
+            timeSpan.textContent = formatTime(message.timestamp);
+            headerDiv.appendChild(timeSpan);
+            
+            messageDiv.appendChild(headerDiv);
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+            
+            if (message.role === 'assistant' && systemPromptSettings.useMarkdown) {
+                contentDiv.innerHTML = marked.parse(message.content);
+            } else {
+                contentDiv.textContent = message.content;
+            }
+            
+            messageDiv.appendChild(contentDiv);
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.classList.add('message-actions');
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.classList.add('copy-btn');
+            copyBtn.title = 'Копировать';
+            copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+            actionsDiv.appendChild(copyBtn);
+            
+            messageDiv.appendChild(actionsDiv);
+            
+            return messageDiv;
+        }
+
+        function formatTime(date) {
+            // Проверяем, является ли date объектом Date, если нет - создаем новый
+            const dateObj = date instanceof Date ? date : new Date(date);
+            return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function sendMessage() {
+            const chatInput = document.getElementById('chat-input');
+            const message = chatInput.value.trim();
+            
+            if (!message) return;
+            
+            // Останавливаем предыдущий вывод, если он есть
+            if (currentTyper) {
+                currentTyper.stop();
+                currentTyper = null;
+            }
+            
+            // Добавляем сообщение пользователя в историю
+            const userMessage = {
+                role: 'user',
+                content: message,
+                timestamp: new Date()
+            };
+            
+            chatHistory.push(userMessage);
+            
+            // Очищаем поле ввода
+            chatInput.value = '';
+            
+            // Обновляем интерфейс
+            renderChatHistory();
+            
+            // Показываем индикатор набора текста
+            showTypingIndicator();
+            
+            // Подготавливаем запрос к модели
+            prepareModelRequest(message);
+        }
+
+        function showTypingIndicator() {
+            const chatMessagesContainer = document.getElementById('chat-messages');
+            
+            const typingIndicator = document.createElement('div');
+            typingIndicator.classList.add('typing-indicator');
+            typingIndicator.id = 'typing-indicator';
+            
+            for (let i = 0; i < 3; i++) {
+                const span = document.createElement('span');
+                typingIndicator.appendChild(span);
+            }
+            
+            chatMessagesContainer.appendChild(typingIndicator);
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        async function prepareModelRequest(message) {
+            try {
+                // Формируем системный промпт на основе настроек
+                const systemPrompt = buildSystemPrompt();
+                
+                // Формируем сообщения для запроса
+                const messages = [
+                    { role: 'system', content: systemPrompt },
+                    ...chatHistory.map(msg => ({
+                        role: msg.role,
+                        content: msg.content
+                    }))
+                ];
+                
+                // Добавляем информацию о загруженных файлах, если они есть
+                if (uploadedFiles.length > 0) {
+                    const fileContents = await Promise.all(uploadedFiles.map(file => extractFileContent(file)));
+                    messages.push({
+                        role: 'system',
+                        content: `Пользователь загрузил следующие файлы:\n${fileContents.join('\n\n')}`
+                    });
+                }
+                
+                // Отправляем запрос к модели
+                await sendModelRequest(messages);
+            } catch (error) {
+                console.error('Ошибка при подготовке запроса:', error);
+                hideTypingIndicator();
+                showNotification('Ошибка при отправке запроса: ' + error.message, 'error');
+            }
+        }
+
+        function buildSystemPrompt() {
+            let prompt = systemPromptSettings.systemPrompt;
+            
+            // Добавляем поведенческие настройки
+            prompt += `\n\nТвоя креативность: ${systemPromptSettings.creativity}`;
+            prompt += `\nТвоя формальность: ${systemPromptSettings.formality}`;
+            prompt += `\nТвоя детализация ответов: ${systemPromptSettings.verbosity}`;
+            prompt += `\nТвое чувство юмора: ${systemPromptSettings.humor}`;
+            
+            // Добавляем переключатели
+            if (systemPromptSettings.useEmojis) {
+                prompt += '\nИспользуй эмодзи в своих ответах.';
+            }
+            
+            if (systemPromptSettings.askClarifying) {
+                prompt += '\nЗадавай уточняющие вопросы, если что-то не понятно.';
+            }
+            
+            if (systemPromptSettings.provideExamples) {
+                prompt += '\nПредоставляй примеры для иллюстрации своих ответов.';
+            }
+            
+            if (systemPromptSettings.useLists) {
+                prompt += '\nИспользуй списки для структурирования информации.';
+            }
+            
+            // Добавляем настройки форматирования
+            if (systemPromptSettings.useMarkdown) {
+                prompt += '\nИспользуй Markdown для форматирования своих ответов.';
+            }
+            
+            if (systemPromptSettings.highlightKeyPoints) {
+                prompt += '\nВыделяй ключевые моменты в своих ответах.';
+            }
+            
+            if (systemPromptSettings.useTables) {
+                prompt += '\nИспользуй таблицы для представления структурированных данных.';
+            }
+            
+            if (systemPromptSettings.addSeparators) {
+                prompt += '\nДобавляй разделители между частями ответа.';
+            }
+            
+            // Добавляем структуру ответа
+            prompt += `\nПредпочтительная структура ответа: ${systemPromptSettings.responseStructure}`;
+            prompt += `\nМаксимальная длина ответа: ${systemPromptSettings.maxResponseLength} токенов`;
+            
+            // Добавляем ограничения
+            if (systemPromptSettings.noPolitics) {
+                prompt += '\nНе обсуждай политику.';
+            }
+            
+            if (systemPromptSettings.noReligion) {
+                prompt += '\nНе обсуждай религию.';
+            }
+            
+            if (systemPromptSettings.noProfanity) {
+                prompt += '\nНе используй нецензурную лексику.';
+            }
+            
+            if (systemPromptSettings.noMedicalAdvice) {
+                prompt += '\nНе давай медицинские советы.';
+            }
+            
+            if (systemPromptSettings.customRestrictions) {
+                prompt += `\nДополнительные ограничения: ${systemPromptSettings.customRestrictions}`;
+            }
+            
+            return prompt;
+        }
+
+        async function sendModelRequest(messages) {
+            try {
+                const response = await fetch(`${modelSettings.url}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${modelSettings.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: modelSettings.name,
+                        messages: messages,
+                        stream: true,
+                        temperature: systemPromptSettings.creativity,
+                        max_tokens: systemPromptSettings.maxResponseLength,
+                        top_p: systemPromptSettings.topP,
+                        frequency_penalty: systemPromptSettings.frequencyPenalty,
+                        presence_penalty: systemPromptSettings.presencePenalty,
+                        stop: (systemPromptSettings.stopSequences || '').split(',').map(s => s.trim()).filter(Boolean),
+                        seed: systemPromptSettings.seed ? Number(systemPromptSettings.seed) : undefined
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Ошибка HTTP: ${response.status}`);
+                }
+                
+                // Обрабатываем потоковый ответ
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                // Создаем элемент для сообщения ассистента
+                const assistantMessage = {
+                    role: 'assistant',
+                    content: '',
+                    timestamp: new Date()
+                };
+                
+                chatHistory.push(assistantMessage);
+                
+                // Создаем элемент сообщения в интерфейсе
+                const messageElement = createMessageElement(assistantMessage);
+                const chatMessagesContainer = document.getElementById('chat-messages');
+                chatMessagesContainer.appendChild(messageElement);
+                
+                // Находим контейнер для содержимого сообщения
+                const messageContent = messageElement.querySelector('.message-content');
+                
+                // Создаем экземпляр SmoothTyper для плавного вывода текста
+                currentTyper = new SmoothTyper(
+                    messageContent,
+                    systemPromptSettings.typingSpeed,
+                    systemPromptSettings.useMarkdown
+                );
+                
+                hideTypingIndicator();
+                
+                // Читаем поток данных
+                let buffer = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) break;
+                    
+                    // Декодируем полученные данные
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+                    
+                    // Разделяем на строки
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Сохраняем незавершенную строку
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            
+                            if (data === '[DONE]') {
+                                // Мягко завершаем: даём очереди опустеть, Markdown рендерится постепенно
+                                if (currentTyper) {
+                                    currentTyper.finish();
+                                }
+                                // Выходим из цикла чтения; финализация будет ниже
+                                break;
+                            }
+                            
+                            try {
+                                const json = JSON.parse(data);
+                                const content = json.choices[0]?.delta?.content || '';
+                                
+                                if (content) {
+                                    // Добавляем текст в SmoothTyper для посимвольного вывода
+                                    currentTyper.addText(content);
+                                    assistantMessage.content += content;
+                                }
+                            } catch (e) {
+                                console.error('Ошибка при парсинге JSON:', e);
+                            }
+                        }
+                    }
+                    
+                    // Прокручиваем чат вниз
+                    chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+                }
+                
+                // Дожидаемся естественного завершения печати и финального рендера
+                if (currentTyper) {
+                    await currentTyper.waitUntilDone();
+                    currentTyper = null;
+                }
+            } catch (error) {
+                console.error('Ошибка при отправке запроса к модели:', error);
+                hideTypingIndicator();
+                showNotification('Ошибка при отправке запроса к модели: ' + error.message, 'error');
+            }
+        }
+
+        async function extractFileContent(file) {
+            const { name, type, content } = file;
+            
+            if (type === 'application/pdf') {
+                // Извлечение текста из PDF
+                const pdf = await pdfjsLib.getDocument(content).promise;
+                let text = '';
+                
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    text += pageText + '\n';
+                }
+                
+                return `Файл: ${name}\n${text}`;
+            } else if (type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                // Извлечение текста из DOCX
+                const result = await mammoth.extractRawText({ arrayBuffer: content });
+                return `Файл: ${name}\n${result.value}`;
+            } else if (type === 'text/plain') {
+                // Извлечение текста из TXT
+                const text = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsText(content);
+                });
+                return `Файл: ${name}\n${text}`;
+            } else if (type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+                      type === 'application/vnd.ms-excel') {
+                // Извлечение текста из XLSX/XLS
+                const workbook = XLSX.read(content, { type: 'array' });
+                let text = '';
+                
+                workbook.SheetNames.forEach(sheetName => {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const sheetText = XLSX.utils.sheet_to_txt(worksheet);
+                    text += `Лист: ${sheetName}\n${sheetText}\n\n`;
+                });
+                
+                return `Файл: ${name}\n${text}`;
+            } else {
+                return `Файл: ${name}\n(Неизвестный формат файла)`;
+            }
+        }
+
+        async function handleFileUpload(event) {
+            const files = event.target.files;
+            
+            if (files.length === 0) return;
+            
+            try {
+                const newlyAdded = [];
+                for (const file of files) {
+                    const { name, size, type } = file;
+                    
+                    // Читаем содержимое файла
+                    const content = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsArrayBuffer(file);
+                    });
+                    
+                    // Добавляем файл в список загруженных файлов
+                    const fileObj = {
+                        name,
+                        size,
+                        type,
+                        content
+                    };
+                    uploadedFiles.push(fileObj);
+                    newlyAdded.push(fileObj);
+                }
+                
+                // Обновляем интерфейс
+                renderUploadedFiles();
+                
+                // Добавляем сообщения в чат от пользователя для каждого загруженного файла (только имя)
+                newlyAdded.forEach(f => {
+                    chatHistory.push({
+                        role: 'user',
+                        content: `Файл: ${f.name}`,
+                        timestamp: new Date(),
+                        isFile: true
+                    });
+                });
+                renderChatHistory();
+                autoScrollChat(true);
+                
+                // Показываем уведомление
+                showNotification(`Загружено файлов: ${files.length}`);
+            } catch (error) {
+                console.error('Ошибка при загрузке файлов:', error);
+                showNotification('Ошибка при загрузке файлов: ' + error.message, 'error');
+            } finally {
+                // Очищаем input
+                event.target.value = '';
+            }
+        }
+
+        function renderUploadedFiles() {
+            const uploadedFilesContainer = document.getElementById('uploaded-files');
+            uploadedFilesContainer.innerHTML = '';
+            
+            if (uploadedFiles.length === 0) {
+                uploadedFilesContainer.classList.remove('active');
+                return;
+            }
+            
+            uploadedFilesContainer.classList.add('active');
+            
+            uploadedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.classList.add('file-item');
+                
+                const fileInfo = document.createElement('div');
+                fileInfo.classList.add('file-info');
+                
+                const fileIcon = document.createElement('i');
+                fileIcon.classList.add('file-icon', 'fas');
+                
+                // Определяем иконку в зависимости от типа файла
+                if (file.type === 'application/pdf') {
+                    fileIcon.classList.add('fa-file-pdf');
+                } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    fileIcon.classList.add('fa-file-word');
+                } else if (file.type === 'text/plain') {
+                    fileIcon.classList.add('fa-file-alt');
+                } else if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+                          file.type === 'application/vnd.ms-excel') {
+                    fileIcon.classList.add('fa-file-excel');
+                } else {
+                    fileIcon.classList.add('fa-file');
+                }
+                
+                fileInfo.appendChild(fileIcon);
+                
+                const fileName = document.createElement('div');
+                fileName.classList.add('file-name');
+                fileName.textContent = file.name;
+                fileInfo.appendChild(fileName);
+                
+                const fileSize = document.createElement('div');
+                fileSize.classList.add('file-size');
+                fileSize.textContent = formatFileSize(file.size);
+                fileInfo.appendChild(fileSize);
+                
+                fileItem.appendChild(fileInfo);
+                
+                const removeButton = document.createElement('button');
+                removeButton.classList.add('remove-file');
+                removeButton.innerHTML = '<i class="fas fa-times"></i>';
+                removeButton.addEventListener('click', () => {
+                    uploadedFiles.splice(index, 1);
+                    renderUploadedFiles();
+                });
+                
+                fileItem.appendChild(removeButton);
+                uploadedFilesContainer.appendChild(fileItem);
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function startNewChat() {
+            if (confirm('Начать новый чат? Текущий чат будет сохранен в истории.')) {
+                try {
+                    // Останавливаем текущий вывод, если он есть
+                    if (currentTyper) {
+                        currentTyper.stop();
+                        currentTyper = null;
+                    }
+                    
+                    // Сохраняем текущий чат только если есть сообщения кроме приветственного
+                    if (chatHistory.length > 1) {
+                        saveCurrentChat();
+                    }
+                    
+                    // Очищаем историю чата
+                    chatHistory = [
+                        {
+                            role: 'assistant',
+                            content: 'Привет! Я твой AI ассистент. Чем могу помочь?',
+                            timestamp: new Date()
+                        }
+                    ];
+                    
+                    // Очищаем загруженные файлы
+                    uploadedFiles = [];
+                    renderUploadedFiles();
+                    
+                    // Обновляем интерфейс
+                    renderChatHistory();
+                    
+                    showNotification('Новый чат начат');
+                } catch (error) {
+                    console.error('Ошибка при создании нового чата:', error);
+                    showNotification('Ошибка при создании нового чата: ' + error.message, 'error');
+                }
+            }
+        }
+
+        function clearChat() {
+            if (confirm('Очистить текущий чат? Все сообщения будут удалены.')) {
+                // Останавливаем текущий вывод, если он есть
+                if (currentTyper) {
+                    currentTyper.stop();
+                    currentTyper = null;
+                }
+                
+                // Очищаем историю чата
+                chatHistory = [
+                    {
+                        role: 'assistant',
+                        content: 'Привет! Я твой AI ассистент. Чем могу помочь?',
+                        timestamp: new Date()
+                    }
+                ];
+                
+                // Очищаем загруженные файлы
+                uploadedFiles = [];
+                renderUploadedFiles();
+                
+                // Обновляем интерфейс
+                renderChatHistory();
+                
+                showNotification('Чат очищен');
+            }
+        }
+
+        function exportChat() {
+            let markdown = `# Чат с ${systemPromptSettings.assistantName}\n\n`;
+            
+            chatHistory.forEach(message => {
+                const role = message.role === 'user' ? 'Вы' : systemPromptSettings.assistantName;
+                const time = formatTime(message.timestamp);
+                
+                markdown += `## ${role} (${time})\n\n`;
+                markdown += `${message.content}\n\n`;
+            });
+            
+            // Создаем BOM для корректной кодировки UTF-8
+            const BOM = '\uFEFF';
+            const contentWithBOM = BOM + markdown;
+            
+            // Создаем Blob и скачиваем файл
+            const blob = new Blob([contentWithBOM], { type: 'text/markdown; charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat_${new Date().toISOString().slice(0, 10)}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showNotification('Чат экспортирован в Markdown');
+        }
+
+        function exportToWord() {
+            // Создаем HTML-контент для Word
+            let htmlContent = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' 
+                      xmlns:w='urn:schemas-microsoft-com:office:word' 
+                      xmlns='http://www.w3.org/TR/REC-html40'>
+                <head>
+                    <meta charset='utf-8'>
+                    <title>Чат с ${systemPromptSettings.assistantName}</title>
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            line-height: 1.6;
+                            margin: 20px;
+                        }
+                        h1 {
+                            color: #4f46e5;
+                            text-align: center;
+                        }
+                        .message {
+                            margin-bottom: 20px;
+                            padding: 15px;
+                            border-radius: 8px;
+                        }
+                        .user-message {
+                            background-color: #f3f4f6;
+                            margin-left: 50px;
+                        }
+                        .assistant-message {
+                            background-color: white;
+                            border: 1px solid #e5e7eb;
+                            margin-right: 50px;
+                        }
+                        .message-header {
+                            font-weight: bold;
+                            margin-bottom: 10px;
+                            color: #4f46e5;
+                        }
+                        .message-time {
+                            font-size: 0.9em;
+                            color: #666;
+                        }
+                        pre {
+                            background-color: #2d3748;
+                            color: #e2e8f0;
+                            padding: 16px;
+                            border-radius: 6px;
+                            overflow-x: auto;
+                            font-family: 'Courier New', Courier, monospace;
+                        }
+                        blockquote {
+                            border-left: 4px solid #4f46e5;
+                            padding-left: 16px;
+                            margin: 16px 0;
+                            font-style: italic;
+                            color: #555;
+                            background-color: rgba(79, 70, 229, 0.05);
+                        }
+                        code {
+                            background-color: rgba(79, 70, 229, 0.1);
+                            color: #4338ca;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-family: 'Courier New', Courier, monospace;
+                        }
+                        .separator {
+                            border-top: 1px solid #e5e7eb;
+                            margin: 20px 0;
+                        }
+                        table {
+                            border-collapse: collapse;
+                            width: 100%;
+                            margin: 10px 0;
+                        }
+                        th, td {
+                            border: 1px solid #ddd;
+                            padding: 8px;
+                            text-align: left;
+                        }
+                        th {
+                            background-color: #f2f2f2;
+                            font-weight: bold;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>Чат с ${systemPromptSettings.assistantName}</h1>
+            `;
+            
+            // Добавляем сообщения
+            chatHistory.forEach(message => {
+                const role = message.role === 'user' ? 'Вы' : systemPromptSettings.assistantName;
+                const time = formatTime(message.timestamp);
+                const messageClass = message.role === 'user' ? 'user-message' : 'assistant-message';
+                
+                htmlContent += `
+                    <div class="message ${messageClass}">
+                        <div class="message-header">
+                            ${role} <span class="message-time">(${time})</span>
+                        </div>
+                        <div class="message-content">
+                `;
+                
+                // Обрабатываем контент сообщения
+                if (message.role === 'assistant' && systemPromptSettings.useMarkdown) {
+                    // Преобразуем Markdown в HTML
+                    const htmlContentMessage = marked.parse(message.content);
+                    htmlContent += htmlContentMessage;
+                } else {
+                    // Экранируем HTML и добавляем как текст
+                    const escapedContent = message.content
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                    htmlContent += escapedContent;
+                }
+                
+                htmlContent += `
+                        </div>
+                    </div>
+                    <div class="separator"></div>
+                `;
+            });
+            
+            htmlContent += `
+                </body>
+                </html>
+            `;
+            
+            // Создаем Blob с HTML-контентом
+            const blob = new Blob([htmlContent], { 
+                type: 'application/msword'
+            });
+            
+            // Создаем ссылку для скачивания
+            const url = URL.createObjectURL(blob);
+            
+            // Открываем в новой вкладке для скачивания
+            const newWindow = window.open(url, '_blank');
+            
+            // Если новая вкладка заблокирована, используем альтернативный способ
+            if (!newWindow) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `chat-${new Date().toISOString().slice(0, 10)}.doc`;
+                a.target = '_blank'; // Открываем в новой вкладке
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+            
+            // Очищаем URL через некоторое время
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 1000);
+            
+            showNotification('Чат успешно экспортирован в Word (.doc)');
+        }
+
+        // Функция экспорта в TXT
+        function exportToTxt() {
+            try {
+                // Создаем простой текстовый файл
+                let txtContent = `Чат с ${systemPromptSettings.assistantName}\n`;
+                txtContent += `Дата: ${new Date().toLocaleDateString('ru-RU')}\n`;
+                txtContent += `Время: ${new Date().toLocaleTimeString('ru-RU')}\n`;
+                txtContent += '='.repeat(50) + '\n\n';
+                
+                chatHistory.forEach(message => {
+                    const role = message.role === 'user' ? 'Вы' : systemPromptSettings.assistantName;
+                    const time = formatTime(message.timestamp);
+                    
+                    txtContent += `${role} (${time}):\n`;
+                    txtContent += `${message.content}\n`;
+                    txtContent += '-'.repeat(30) + '\n\n';
+                });
+                
+                // Создаем BOM для корректной кодировки UTF-8
+                const BOM = '\uFEFF';
+                const contentWithBOM = BOM + txtContent;
+                
+                // Создаем Blob и скачиваем файл
+                const blob = new Blob([contentWithBOM], { type: 'text/plain; charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `chat_${new Date().toISOString().slice(0, 10)}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showNotification('Чат экспортирован в TXT');
+                
+            } catch (error) {
+                console.error('Ошибка при создании TXT файла:', error);
+                showNotification('Ошибка при экспорте в TXT: ' + error.message, 'error');
+            }
+        }
+
+
+
+
+
+        function exportToPDF() {
+            const chatMessagesContainer = document.getElementById('chat-messages');
+            
+            // Создаем временный контейнер для экспорта
+            const exportContainer = document.createElement('div');
+            exportContainer.style.padding = '20px';
+            exportContainer.style.fontFamily = 'Arial, sans-serif';
+            exportContainer.style.lineHeight = '1.6';
+            
+            // Добавляем заголовок
+            const title = document.createElement('h1');
+            title.textContent = `Чат с ${systemPromptSettings.assistantName}`;
+            title.style.textAlign = 'center';
+            title.style.color = '#4f46e5';
+            title.style.marginBottom = '30px';
+            exportContainer.appendChild(title);
+            
+            // Копируем сообщения
+            const messages = chatMessagesContainer.querySelectorAll('.message');
+            messages.forEach(message => {
+                const clone = message.cloneNode(true);
+                // Удаляем кнопки действий
+                const actions = clone.querySelector('.message-actions');
+                if (actions) actions.remove();
+                exportContainer.appendChild(clone);
+            });
+            
+            // Временно добавляем контейнер в документ
+            document.body.appendChild(exportContainer);
+            
+            // Экспортируем в PDF
+            const opt = {
+                margin: 10,
+                filename: `chat_${new Date().toISOString().slice(0, 10)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            
+            html2pdf().set(opt).from(exportContainer).save().then(() => {
+                // Удаляем временный контейнер
+                document.body.removeChild(exportContainer);
+                showNotification('Чат экспортирован в PDF');
+            });
+        }
+
+        function saveCurrentChat() {
+            try {
+                const chatName = prompt('Введите название для сохранения чата:', `Чат ${new Date().toLocaleString()}`);
+                
+                if (!chatName) return;
+                
+                // Проверяем, что есть что сохранять
+                if (chatHistory.length <= 1) {
+                    showNotification('Нет сообщений для сохранения', 'info');
+                    return;
+                }
+                
+                // Получаем сохраненные чаты
+                let savedChats = JSON.parse(localStorage.getItem('savedChats') || '[]');
+                
+                // Добавляем текущий чат
+                savedChats.push({
+                    name: chatName,
+                    date: new Date().toISOString(),
+                    history: [...chatHistory], // Копируем массив
+                    settings: {
+                        modelSettings: { ...modelSettings },
+                        systemPromptSettings: { ...systemPromptSettings }
+                    }
+                });
+                
+                // Сохраняем в localStorage
+                localStorage.setItem('savedChats', JSON.stringify(savedChats));
+                
+                showNotification('Чат сохранен');
+            } catch (error) {
+                console.error('Ошибка при сохранении чата:', error);
+                showNotification('Ошибка при сохранении чата: ' + error.message, 'error');
+            }
+        }
+
+        function openChatManagerModal() {
+            try {
+                const modal = document.getElementById('chat-manager-modal');
+                const savedChatsList = document.getElementById('saved-chats-list');
+                
+                // Получаем сохраненные чаты
+                const savedChats = JSON.parse(localStorage.getItem('savedChats') || '[]');
+                
+                // Очищаем список
+                savedChatsList.innerHTML = '';
+                
+                if (savedChats.length === 0) {
+                    savedChatsList.innerHTML = '<p>Сохраненных чатов нет</p>';
+                } else {
+                    // Создаем элементы для каждого чата
+                    savedChats.forEach((chat, index) => {
+                        const chatItem = document.createElement('div');
+                        chatItem.classList.add('saved-chat-item');
+                        
+                        const chatInfo = document.createElement('div');
+                        chatInfo.classList.add('saved-chat-info');
+                        
+                        const chatName = document.createElement('div');
+                        chatName.classList.add('saved-chat-name');
+                        chatName.textContent = chat.name;
+                        chatInfo.appendChild(chatName);
+                        
+                        const chatDate = document.createElement('div');
+                        chatDate.classList.add('saved-chat-date');
+                        chatDate.textContent = new Date(chat.date).toLocaleString();
+                        chatInfo.appendChild(chatDate);
+                        
+                        chatItem.appendChild(chatInfo);
+                        
+                        const chatActions = document.createElement('div');
+                        chatActions.classList.add('saved-chat-actions');
+                        
+                        const loadBtn = document.createElement('button');
+                        loadBtn.textContent = 'Загрузить';
+                        loadBtn.classList.add('btn-secondary');
+                        loadBtn.addEventListener('click', () => loadChat(index));
+                        chatActions.appendChild(loadBtn);
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = 'Удалить';
+                        deleteBtn.classList.add('btn-danger');
+                        deleteBtn.addEventListener('click', () => deleteChat(index));
+                        chatActions.appendChild(deleteBtn);
+                        
+                        chatItem.appendChild(chatActions);
+                        savedChatsList.appendChild(chatItem);
+                    });
+                }
+                
+                // Показываем модальное окно
+                modal.style.display = 'block';
+            } catch (error) {
+                console.error('Ошибка при открытии модального окна чатов:', error);
+                showNotification('Ошибка при открытии списка чатов: ' + error.message, 'error');
+            }
+        }
+
+        function closeChatManagerModal() {
+            const modal = document.getElementById('chat-manager-modal');
+            modal.style.display = 'none';
+        }
+
+        function loadChat(index) {
+            try {
+                // Получаем сохраненные чаты
+                const savedChats = JSON.parse(localStorage.getItem('savedChats') || '[]');
+                
+                if (index < 0 || index >= savedChats.length) {
+                    console.error('Неверный индекс чата:', index);
+                    return;
+                }
+                
+                const chat = savedChats[index];
+                
+                console.log('Загружаем чат:', chat.name, 'с', chat.history.length, 'сообщениями');
+                console.log('Настройки чата:', chat.settings);
+                
+                // Останавливаем текущий вывод, если он есть
+                if (currentTyper) {
+                    currentTyper.stop();
+                    currentTyper = null;
+                }
+                
+                // Загружаем чат
+                chatHistory = [...chat.history]; // Копируем массив
+                
+                // Загружаем настройки, если они есть
+                if (chat.settings && chat.settings.modelSettings) {
+                    modelSettings = { ...chat.settings.modelSettings };
+                    console.log('Загружены настройки модели:', modelSettings);
+                }
+                
+                if (chat.settings && chat.settings.systemPromptSettings) {
+                    systemPromptSettings = { ...chat.settings.systemPromptSettings };
+                    console.log('Загружены системные настройки:', systemPromptSettings);
+                }
+                
+                // Очищаем загруженные файлы при загрузке чата
+                uploadedFiles = [];
+                renderUploadedFiles();
+                
+                // Обновляем интерфейс
+                renderChatHistory();
+                
+                closeChatManagerModal();
+                
+                showNotification(`Чат "${chat.name}" загружен`);
+            } catch (error) {
+                console.error('Ошибка при загрузке чата:', error);
+                showNotification('Ошибка при загрузке чата: ' + error.message, 'error');
+            }
+        }
+
+        function deleteChat(index) {
+            if (!confirm('Удалить этот чат?')) return;
+            
+            try {
+                // Получаем сохраненные чаты
+                let savedChats = JSON.parse(localStorage.getItem('savedChats') || '[]');
+                
+                // Удаляем чат
+                savedChats.splice(index, 1);
+                
+                // Сохраняем в localStorage
+                localStorage.setItem('savedChats', JSON.stringify(savedChats));
+                
+                // Обновляем список
+                openChatManagerModal();
+                
+                showNotification('Чат удален');
+            } catch (error) {
+                console.error('Ошибка при удалении чата:', error);
+                showNotification('Ошибка при удалении чата: ' + error.message, 'error');
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showNotification('Текст скопирован в буфер обмена');
+                })
+                .catch(err => {
+                    console.error('Ошибка при копировании текста:', err);
+                    showNotification('Ошибка при копировании текста', 'error');
+                });
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification';
+            
+            if (type === 'error') {
+                notification.classList.add('error');
+            } else if (type === 'info') {
+                notification.classList.add('info');
+            }
+            
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function loadSettings() {
+            // Загрузка настроек модели
+            const savedModelSettings = localStorage.getItem('modelSettings');
+            if (savedModelSettings) {
+                modelSettings = JSON.parse(savedModelSettings);
+                
+                // Обновляем форму
+                document.getElementById('model-url').value = modelSettings.url || '';
+                document.getElementById('model-name').value = modelSettings.name || '';
+                document.getElementById('api-key').value = modelSettings.apiKey || '';
+            }
+            
+            // Загрузка настроек системного промпта
+            const savedSystemPromptSettings = localStorage.getItem('systemPromptSettings');
+            if (savedSystemPromptSettings) {
+                systemPromptSettings = JSON.parse(savedSystemPromptSettings);
+                
+                // Обновляем форму
+                document.getElementById('assistant-name').value = systemPromptSettings.assistantName || '';
+                document.getElementById('assistant-description').value = systemPromptSettings.assistantDescription || '';
+                document.getElementById('system-prompt').value = systemPromptSettings.systemPrompt || '';
+                
+                // Поведенческие настройки
+                document.getElementById('creativity').value = systemPromptSettings.creativity || 0.7;
+                document.getElementById('creativity-value').textContent = systemPromptSettings.creativity || 0.7;
+                
+                document.getElementById('formality').value = systemPromptSettings.formality || 0.5;
+                document.getElementById('formality-value').textContent = systemPromptSettings.formality || 0.5;
+                
+                document.getElementById('verbosity').value = systemPromptSettings.verbosity || 0.7;
+                document.getElementById('verbosity-value').textContent = systemPromptSettings.verbosity || 0.7;
+                
+                document.getElementById('humor').value = systemPromptSettings.humor || 0.3;
+                document.getElementById('humor-value').textContent = systemPromptSettings.humor || 0.3;
+                
+                // Скорость вывода
+                document.getElementById('typing-speed').value = systemPromptSettings.typingSpeed || 30;
+                document.getElementById('typing-speed-value').textContent = systemPromptSettings.typingSpeed || 30;
+                // Продвинутые параметры
+                const topPElLoad = document.getElementById('top-p');
+                if (topPElLoad && typeof systemPromptSettings.topP !== 'undefined') {
+                    topPElLoad.value = systemPromptSettings.topP;
+                    document.getElementById('top-p-value').textContent = systemPromptSettings.topP;
+                }
+                const freqElLoad = document.getElementById('frequency-penalty');
+                if (freqElLoad && typeof systemPromptSettings.frequencyPenalty !== 'undefined') {
+                    freqElLoad.value = systemPromptSettings.frequencyPenalty;
+                    document.getElementById('frequency-penalty-value').textContent = systemPromptSettings.frequencyPenalty;
+                }
+                const presElLoad = document.getElementById('presence-penalty');
+                if (presElLoad && typeof systemPromptSettings.presencePenalty !== 'undefined') {
+                    presElLoad.value = systemPromptSettings.presencePenalty;
+                    document.getElementById('presence-penalty-value').textContent = systemPromptSettings.presencePenalty;
+                }
+                const seedElLoad = document.getElementById('seed');
+                if (seedElLoad && typeof systemPromptSettings.seed !== 'undefined') {
+                    seedElLoad.value = systemPromptSettings.seed;
+                }
+                
+                // Переключатели
+                document.getElementById('use-emojis').checked = systemPromptSettings.useEmojis !== false;
+                document.getElementById('ask-clarifying').checked = systemPromptSettings.askClarifying || false;
+                document.getElementById('provide-examples').checked = systemPromptSettings.provideExamples || false;
+                document.getElementById('use-lists').checked = systemPromptSettings.useLists !== false;
+                
+                // Форматирование
+                document.getElementById('use-markdown').checked = systemPromptSettings.useMarkdown !== false;
+                document.getElementById('highlight-key-points').checked = systemPromptSettings.highlightKeyPoints || false;
+                document.getElementById('use-tables').checked = systemPromptSettings.useTables || false;
+                document.getElementById('add-separators').checked = systemPromptSettings.addSeparators || false;
+                
+                // Структура ответа
+                document.getElementById('response-structure').value = systemPromptSettings.responseStructure || 'paragraph';
+                document.getElementById('max-response-length').value = systemPromptSettings.maxResponseLength || 1000;
+                const stopElLoad = document.getElementById('stop-sequences');
+                if (stopElLoad && typeof systemPromptSettings.stopSequences !== 'undefined') {
+                    stopElLoad.value = systemPromptSettings.stopSequences;
+                }
+                
+                // Ограничения
+                document.getElementById('no-politics').checked = systemPromptSettings.noPolitics || false;
+                document.getElementById('no-religion').checked = systemPromptSettings.noReligion || false;
+                document.getElementById('no-profanity').checked = systemPromptSettings.noProfanity !== false;
+                document.getElementById('no-medical-advice').checked = systemPromptSettings.noMedicalAdvice !== false;
+                document.getElementById('custom-restrictions').value = systemPromptSettings.customRestrictions || '';
+            }
+        }
+    </script>
+</body>
+</html>
