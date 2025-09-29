@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор VRAM для LLM</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #3249deff 0%, rgb(82, 135, 213) 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 30px;
+            padding: 30px;
+        }
+        .input-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+        .input-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .input-section h2::before {
+            content: "⚙️";
+            font-size: 1.2rem;
+        }
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .input-group label {
+            font-size: 0.9rem;
+            color: #555;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .input-group input {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .section-divider {
+            margin: 25px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .section-divider h3 {
+            color: #764ba2;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chunk-section h3::before {
+            content: "📦";
+        }
+        .window-section h3::before {
+            content: "⊞";
+        }
+        .additional-section h3::before {
+            content: "🔧";
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .toggle-container input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        .toggle-container label {
+            cursor: pointer;
+            font-weight: 500;
+            color: #555;
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        button {
+            flex: 1;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .calculate-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .calculate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        .reset-btn {
+            background: #e0e0e0;
+            color: #555;
+        }
+        .reset-btn:hover {
+            background: #d0d0d0;
+        }
+        .results-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+        .results-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .results-section h2::before {
+            content: "📊";
+            font-size: 1.2rem;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        .loading.show {
+            display: block;
+        }
+        .loading::after {
+            content: "";
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #667eea;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .detailed-calculations {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .detailed-calculations h3 {
+            color: #764ba2;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        .calculation-step {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        .calculation-step:last-child {
+            margin-bottom: 0;
+        }
+        .step-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        .formula {
+            font-family: 'Courier New', monospace;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+        .calculation-details {
+            margin-bottom: 8px;
+        }
+        .calculation-details .label {
+            font-weight: 500;
+            color: #555;
+            display: inline-block;
+            min-width: 150px;
+        }
+        .calculation-details .value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+        .step-result {
+            font-weight: 600;
+            color: #333;
+            font-size: 1rem;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #ddd;
+        }
+        .substep {
+            margin-left: 15px;
+            margin-top: 10px;
+            padding-left: 10px;
+            border-left: 2px solid #ccc;
+        }
+        .substep-title {
+            font-weight: 600;
+            color: #764ba2;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            height: 600px;
+            margin-top: 20px;
+            position: relative;
+        }
+        .chart-container h3 {
+            color: #764ba2;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.3rem;
+        }
+        .scenario-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .scenario-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            min-height: 140px;
+        }
+        .scenario-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        .scenario-card h4 {
+            color: #764ba2;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        .scenario-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .scenario-actual {
+            font-size: 0.9rem;
+            color: #764ba2;
+            font-weight: 500;
+            margin-top: 5px;
+            line-height: 1.4;
+        }
+        .actual-gpu-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #e53e3e;
+            display: block;
+            margin-top: 5px;
+        }
+        .info-message {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            color: #0d47a1;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .info-message strong {
+            color: #01579b;
+        }
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 768px) {
+            .input-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .scenario-results {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 2rem;
+            }
+        }
+        /* Дополнительные стили для прозрачности вычислений */
+        .calculation-breakdown {
+            background: #f0f7ff;
+            border-radius: 6px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            border-left: 3px solid #2196f3;
+        }
+        .calculation-breakdown .step {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .calculation-breakdown .step .description {
+            color: #555;
+        }
+        .calculation-breakdown .step .result {
+            font-weight: bold;
+            color: #333;
+        }
+        .formula-explanation {
+            margin-top: 5px;
+            font-style: italic;
+            color: #666;
+            font-size: 0.85rem;
+        }
+        .intermediate-calc {
+            background: #fff8e1;
+            border-left: 3px solid #ffc107;
+            padding: 8px;
+            margin: 8px 0;
+            border-radius: 4px;
+        }
+        .intermediate-calc-title {
+            font-weight: 600;
+            color: #ff8f00;
+            margin-bottom: 5px;
+        }
+        /* Стили для пошаговых вычислений */
+        .step-by-step {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        .step-by-step-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        .step-by-step-content {
+            margin-left: 20px;
+        }
+        .step-item {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px dashed #ddd;
+        }
+        .step-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 50%;
+            margin-right: 10px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        .step-description {
+            display: inline-block;
+            color: #333;
+            font-weight: 500;
+        }
+        .step-calculation {
+            margin-top: 8px;
+            padding: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        .step-result-text {
+            margin-top: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        /* Стили для формулы в заголовке раздела */
+        .section-formula {
+            background: #e8f0fe;
+            border-left: 4px solid #4285f4;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95rem;
+            color: #1a73e8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Калькулятор VRAM для LLM</h1>
+            <p>Расчет видеопамяти для инференса моделей машинного обучения в vLLM</p>
+        </header>
+        <main class="main-content">
+            <section class="input-section">
+                <h2>Параметры модели</h2>
+                
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label for="numLayers">Количество слоев</label>
+                        <input type="number" id="numLayers" value="48" min="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="numKvHeads">Количество KV-голов</label>
+                        <input type="number" id="numKvHeads" value="8" min="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="headDim">Размерность головы</label>
+                        <input type="number" id="headDim" value="128" min="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="maxModelLen">Макс. длина модели</label>
+                        <input type="number" id="maxModelLen" value="250000" min="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="totalParams">Всего параметров</label>
+                        <input type="number" id="totalParams" value="109000000000" min="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="quantType">Бит на параметр</label>
+                        <input type="number" id="quantType" value="4" min="1" max="32">
+                    </div>
+                    <div class="input-group">
+                        <label for="maxNumSeqs">Макс. кол-во последовательностей</label>
+                        <input type="number" id="maxNumSeqs" value="1" min="1" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label for="useMla">MLA множитель</label>
+                        <input type="number" id="useMla" value="2" min="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="blockSize">Размер блока (block_size)</label>
+                        <input type="number" id="blockSize" value="16" min="1">
+                    </div>
+                </div>
+                
+                <div class="toggle-container">
+                    <input type="checkbox" id="enableChunk" checked>
+                    <label for="enableChunk">Включить расчет Chunk Attention</label>
+                </div>
+                
+                <div class="section-divider chunk-section">
+                    <h3>Chunk Attention параметры</h3>
+                    <div class="input-grid">
+                        <div class="input-group">
+                            <label for="chunkFullLayers">Full attention слои</label>
+                            <input type="number" id="chunkFullLayers" value="12" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label for="chunkChunkLayers">Chunk attention слои</label>
+                            <input type="number" id="chunkChunkLayers" value="36" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label for="chunkSize">Размер чанка</label>
+                            <input type="number" id="chunkSize" value="8192" min="1">
+                        </div>
+                        <div class="input-group">
+                            <label for="chunkMaxTokens">Макс. токенов в батче</label>
+                            <input type="number" id="chunkMaxTokens" value="8192" min="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="toggle-container">
+                    <input type="checkbox" id="enableWindow" checked>
+                    <label for="enableWindow">Включить расчет Sliding Window Attention</label>
+                </div>
+                
+                <div class="section-divider window-section">
+                    <h3>Sliding Window Attention параметры</h3>
+                    <div class="input-grid">
+                        <div class="input-group">
+                            <label for="windowFullLayers">Full attention слои</label>
+                            <input type="number" id="windowFullLayers" value="10" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label for="windowSlidingLayers">Sliding window слои</label>
+                            <input type="number" id="windowSlidingLayers" value="38" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label for="windowSize">Размер окна</label>
+                            <input type="number" id="windowSize" value="1024" min="1">
+                        </div>
+                        <div class="input-group">
+                            <label for="windowMaxTokens">Макс. токенов в батче</label>
+                            <input type="number" id="windowMaxTokens" value="8192" min="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section-divider additional-section">
+                    <h3>Дополнительные параметры VRAM</h3>
+                    <div class="input-grid">
+                        <div class="input-group">
+                            <label for="activationsMemory">Память под активации (ГБ)</label>
+                            <input type="number" id="activationsMemory" value="0" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="cudaOverhead">CUDA накладные расходы (ГБ)</label>
+                            <input type="number" id="cudaOverhead" value="0" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="nonPytorchMemory">Не-PyTorch память (ГБ)</label>
+                            <input type="number" id="nonPytorchMemory" value="0" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="otherExpenses">Прочие расходы (ГБ)</label>
+                            <input type="number" id="otherExpenses" value="0" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="gpuMemoryUtilization">GPU Memory Utilization</label>
+                            <input type="number" id="gpuMemoryUtilization" value="0.9" step="0.01" min="0.01" max="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="info-message" id="gpuUtilizationInfo" style="display: none;">
+                    <strong>Важно:</strong> Так как установлен параметр GPU Memory Utilization = <span id="gpuUtilizationValue">0.9</span>, фактический объем памяти на видеокарте должен быть больше. Для каждого сценария показан требуемый объем памяти и фактический (рассчитанный как требуемый / GPU Memory Utilization).
+                </div>
+                
+                <div class="button-group">
+                    <button class="calculate-btn" onclick="calculate()">Рассчитать</button>
+                    <button class="reset-btn" onclick="resetForm()">Сбросить</button>
+                </div>
+            </section>
+            
+            <section class="results-section">
+                <h2>Результаты расчета</h2>
+                
+                <div class="loading" id="loading">Расчет...</div>
+                
+                <div id="resultsContainer" style="display: none;">
+                    <div class="scenario-results" id="scenarioResults">
+                        <div class="scenario-card">
+                            <h4>Общий подход</h4>
+                            <div class="scenario-value" id="generalTotal">0 ГБ</div>
+                            <div class="scenario-actual" id="generalActual">Фактически на GPU:<br><span class="actual-gpu-value">0 ГБ</span></div>
+                        </div>
+                        <div class="scenario-card">
+                            <h4>Paged Attention</h4>
+                            <div class="scenario-value" id="pagedTotal">0 ГБ</div>
+                            <div class="scenario-actual" id="pagedActual">Фактически на GPU:<br><span class="actual-gpu-value">0 ГБ</span></div>
+                        </div>
+                        <div class="scenario-card" id="chunkCard">
+                            <h4>Chunk Attention</h4>
+                            <div class="scenario-value" id="chunkTotal">0 ГБ</div>
+                            <div class="scenario-actual" id="chunkActual">Фактически на GPU:<br><span class="actual-gpu-value">0 ГБ</span></div>
+                        </div>
+                        <div class="scenario-card" id="windowCard">
+                            <h4>Sliding Window</h4>
+                            <div class="scenario-value" id="windowTotal">0 ГБ</div>
+                            <div class="scenario-actual" id="windowActual">Фактически на GPU:<br><span class="actual-gpu-value">0 ГБ</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detailed-calculations">
+                        <h3>Формулы и вычисления</h3>
+                        <div id="detailedCalculationsContainer"></div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <h3>Сравнение сценариев использования VRAM</h3>
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script>
+        let comparisonChart = null;
+        
+        function calculateMemoryUsage(params) {
+            const {
+                num_layers,
+                num_kv_heads,
+                head_dim,
+                max_model_len,
+                total_params = null,
+                quant_type = 16,
+                bytes_per_element = 2,
+                max_num_seqs = 1,
+                use_mla = 2,
+                block_size = 16,
+                chunk_full_attention_layers = 0,
+                chunk_chunk_attention_layers = 0,
+                chunk_attention_chunk_size = 8192,
+                chunk_max_num_batched_tokens = 8192,
+                window_full_attention_layers = 0,
+                window_sliding_window_layers = 0,
+                window_sliding_window = null,
+                window_max_num_batched_tokens = 8192
+            } = params;
+            
+            // 0. Память под веса
+            let weights_gb = 0;
+            let weights_details = {};
+            if (total_params !== null) {
+                const params_bytes = total_params * (quant_type / 8);
+                weights_gb = Math.round(params_bytes / (1 << 30) * 100) / 100;
+                weights_details = {
+                    formula: "Веса модели (ГБ) = (Общее количество параметров × Бит на параметр / 8) / (1024^3)",
+                    params: total_params,
+                    bits_per_param: quant_type,
+                    bytes_per_param: quant_type / 8,
+                    total_bytes: params_bytes,
+                    gb_divider: 1 << 30,
+                    result: weights_gb
+                };
+            }
+            
+            // Базовые вычисления
+            const page_size_bytes = use_mla * (block_size * num_kv_heads * head_dim) * bytes_per_element;
+            const num_blocks_total = Math.ceil(max_model_len / block_size);
+            const vram_one_layer = num_blocks_total * page_size_bytes;
+            
+            // 1. Память под KV-кэш по общему правилу
+            const kv_cache_bytes_general = use_mla * num_layers * num_kv_heads * head_dim * max_model_len * bytes_per_element * max_num_seqs;
+            const kv_cache_gb_general = Math.round(kv_cache_bytes_general / (1 << 30) * 100) / 100;
+            const general_kv_details = {
+                formula: "KV-кэш (общий подход) (ГБ) = (MLA множитель × Количество слоев × Количество KV-голов × Размерность головы × Макс. длина модели × Байт на элемент × Макс. кол-во последовательностей) / (1024^3)",
+                mla_factor: use_mla,
+                layers: num_layers,
+                kv_heads: num_kv_heads,
+                head_size: head_dim,
+                model_len: max_model_len,
+                bytes_per_element: bytes_per_element,
+                max_seqs: max_num_seqs,
+                total_bytes: kv_cache_bytes_general,
+                gb_divider: 1 << 30,
+                result: kv_cache_gb_general
+            };
+            
+            // 2. Память под KV-кэш по правилу paged attention
+            const kv_cache_paged_bytes = num_layers * vram_one_layer * max_num_seqs;
+            const kv_cache_paged_gb = Math.round(kv_cache_paged_bytes / (1 << 30) * 100) / 100;
+            const paged_kv_details = {
+                formula: "KV-кэш (Paged Attention) (ГБ) = (Количество слоев × Общее количество блоков × Размер страницы в байтах × Макс. кол-во последовательностей) / (1024^3)",
+                layers: num_layers,
+                total_blocks: num_blocks_total,
+                page_size_bytes: page_size_bytes,
+                max_seqs: max_num_seqs,
+                vram_one_layer: vram_one_layer,
+                total_bytes: kv_cache_paged_bytes,
+                gb_divider: 1 << 30,
+                result: kv_cache_paged_gb,
+                intermediate_calc: {
+                    block_size: block_size,
+                    num_kv_heads: num_kv_heads,
+                    head_dim: head_dim,
+                    bytes_per_element: bytes_per_element,
+                    mla_factor: use_mla
+                }
+            };
+            
+            // 3. Первый вариант: chunk attention
+            let total_chunk_variant_gb = 0;
+            let chunk_full_chunk_gb = 0;
+            let chunk_chunk_only_gb = 0;
+            let chunk_details = {};
+            if (chunk_full_attention_layers > 0 || chunk_chunk_attention_layers > 0) {
+                chunk_full_chunk_gb = Math.round(chunk_full_attention_layers * vram_one_layer * max_num_seqs / (1 << 30) * 100) / 100;
+                
+                const num_tokens_chunk = Math.min(chunk_attention_chunk_size + chunk_max_num_batched_tokens, max_model_len);
+                const num_blocks_chunk = Math.ceil(num_tokens_chunk / block_size);
+                const kv_cache_chunk_attention = chunk_chunk_attention_layers * num_blocks_chunk * page_size_bytes * max_num_seqs;
+                chunk_chunk_only_gb = Math.round(kv_cache_chunk_attention / (1 << 30) * 100) / 100;
+                
+                total_chunk_variant_gb = Math.round((chunk_full_chunk_gb + chunk_chunk_only_gb) * 100) / 100;
+                
+                chunk_details = {
+                    formula: "Chunk Attention (ГБ) = (Full attention слои × VRAM одного слоя × Макс. кол-во последовательностей / (1024^3)) + (Chunk attention слои × Количество блоков чанка × Размер страницы в байтах × Макс. кол-во последовательностей / (1024^3))",
+                    full_layers: chunk_full_attention_layers,
+                    chunk_layers: chunk_chunk_attention_layers,
+                    vram_one_layer: vram_one_layer,
+                    max_seqs: max_num_seqs,
+                    chunk_size: chunk_attention_chunk_size,
+                    max_batched_tokens: chunk_max_num_batched_tokens,
+                    model_len: max_model_len,
+                    block_size: block_size,
+                    num_blocks_chunk: num_blocks_chunk,
+                    page_size_bytes: page_size_bytes,
+                    full_part_bytes: chunk_full_attention_layers * vram_one_layer * max_num_seqs,
+                    chunk_part_bytes: kv_cache_chunk_attention,
+                    full_part_gb: chunk_full_chunk_gb,
+                    chunk_part_gb: chunk_chunk_only_gb,
+                    total_gb: total_chunk_variant_gb,
+                    gb_divider: 1 << 30
+                };
+            }
+            
+            // 4. Второй вариант: sliding window attention
+            let total_window_variant_gb = 0;
+            let window_full_window_gb = 0;
+            let window_sliding_window_gb = 0;
+            let window_details = {};
+            if (window_full_attention_layers > 0 || window_sliding_window_layers > 0) {
+                window_full_window_gb = Math.round(window_full_attention_layers * vram_one_layer * max_num_seqs / (1 << 30) * 100) / 100;
+                
+                if (window_sliding_window !== null && window_sliding_window_layers > 0) {
+                    const num_tokens_sliding = Math.min(window_sliding_window - 1 + window_max_num_batched_tokens, max_model_len);
+                    const num_blocks_sliding = Math.ceil(num_tokens_sliding / block_size);
+                    const kv_cache_sliding_attention = window_sliding_window_layers * num_blocks_sliding * page_size_bytes * max_num_seqs;
+                    window_sliding_window_gb = Math.round(kv_cache_sliding_attention / (1 << 30) * 100) / 100;
+                }
+                
+                total_window_variant_gb = Math.round((window_full_window_gb + window_sliding_window_gb) * 100) / 100;
+                
+                window_details = {
+                    formula: "Sliding Window Attention (ГБ) = (Full attention слои × VRAM одного слоя × Макс. кол-во последовательностей / (1024^3)) + (Sliding window слои × Количество блоков скользящего окна × Размер страницы в байтах × Макс. кол-во последовательностей / (1024^3))",
+                    full_layers: window_full_attention_layers,
+                    sliding_layers: window_sliding_window_layers,
+                    vram_one_layer: vram_one_layer,
+                    max_seqs: max_num_seqs,
+                    window_size: window_sliding_window,
+                    max_batched_tokens: window_max_num_batched_tokens,
+                    model_len: max_model_len,
+                    block_size: block_size,
+                    num_blocks_sliding: window_sliding_window !== null ? Math.ceil(Math.min(window_sliding_window - 1 + window_max_num_batched_tokens, max_model_len) / block_size) : 0,
+                    page_size_bytes: page_size_bytes,
+                    full_part_bytes: window_full_attention_layers * vram_one_layer * max_num_seqs,
+                    sliding_part_bytes: window_sliding_window !== null ? window_sliding_window_layers * Math.ceil(Math.min(window_sliding_window - 1 + window_max_num_batched_tokens, max_model_len) / block_size) * page_size_bytes * max_num_seqs : 0,
+                    full_part_gb: window_full_window_gb,
+                    sliding_part_gb: window_sliding_window_gb,
+                    total_gb: total_window_variant_gb,
+                    gb_divider: 1 << 30
+                };
+            }
+            
+            return {
+                weights_gb,
+                weights_details,
+                general_kv_cache_gb: kv_cache_gb_general,
+                general_kv_details,
+                paged_kv_cache_gb: kv_cache_paged_gb,
+                paged_kv_details,
+                chunk_variant_total_gb: total_chunk_variant_gb,
+                chunk_details,
+                window_variant_total_gb: total_window_variant_gb,
+                window_details
+            };
+        }
+        
+        function calculate() {
+            const loading = document.getElementById('loading');
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            loading.classList.add('show');
+            resultsContainer.style.display = 'none';
+            
+            setTimeout(() => {
+                const enableChunk = document.getElementById('enableChunk').checked;
+                const enableWindow = document.getElementById('enableWindow').checked;
+                const gpuMemoryUtilization = parseFloat(document.getElementById('gpuMemoryUtilization').value) || 0.9;
+                
+                // Показываем информационное сообщение о GPU Memory Utilization
+                document.getElementById('gpuUtilizationInfo').style.display = 'block';
+                document.getElementById('gpuUtilizationValue').textContent = gpuMemoryUtilization;
+                
+                const params = {
+                    num_layers: parseInt(document.getElementById('numLayers').value),
+                    num_kv_heads: parseInt(document.getElementById('numKvHeads').value),
+                    head_dim: parseInt(document.getElementById('headDim').value),
+                    max_model_len: parseInt(document.getElementById('maxModelLen').value),
+                    total_params: parseInt(document.getElementById('totalParams').value),
+                    quant_type: parseInt(document.getElementById('quantType').value),
+                    max_num_seqs: parseFloat(document.getElementById('maxNumSeqs').value),
+                    use_mla: parseInt(document.getElementById('useMla').value),
+                    block_size: parseInt(document.getElementById('blockSize').value),
+                    chunk_full_attention_layers: enableChunk ? parseInt(document.getElementById('chunkFullLayers').value) : 0,
+                    chunk_chunk_attention_layers: enableChunk ? parseInt(document.getElementById('chunkChunkLayers').value) : 0,
+                    chunk_attention_chunk_size: enableChunk ? parseInt(document.getElementById('chunkSize').value) : 0,
+                    chunk_max_num_batched_tokens: enableChunk ? parseInt(document.getElementById('chunkMaxTokens').value) : 0,
+                    window_full_attention_layers: enableWindow ? parseInt(document.getElementById('windowFullLayers').value) : 0,
+                    window_sliding_window_layers: enableWindow ? parseInt(document.getElementById('windowSlidingLayers').value) : 0,
+                    window_sliding_window: enableWindow ? parseInt(document.getElementById('windowSize').value) : null,
+                    window_max_num_batched_tokens: enableWindow ? parseInt(document.getElementById('windowMaxTokens').value) : 0
+                };
+                
+                const results = calculateMemoryUsage(params);
+                
+                // Дополнительные параметры
+                const activationsMemory = parseFloat(document.getElementById('activationsMemory').value) || 0;
+                const cudaOverhead = parseFloat(document.getElementById('cudaOverhead').value) || 0;
+                const nonPytorchMemory = parseFloat(document.getElementById('nonPytorchMemory').value) || 0;
+                const otherExpenses = parseFloat(document.getElementById('otherExpenses').value) || 0;
+                
+                // Расчет общего объема памяти для каждого сценария
+                const generalTotal = results.weights_gb + results.general_kv_cache_gb + activationsMemory + cudaOverhead + nonPytorchMemory + otherExpenses;
+                const pagedTotal = results.weights_gb + results.paged_kv_cache_gb + activationsMemory + cudaOverhead + nonPytorchMemory + otherExpenses;
+                const chunkTotal = results.weights_gb + results.chunk_variant_total_gb + activationsMemory + cudaOverhead + nonPytorchMemory + otherExpenses;
+                const windowTotal = results.weights_gb + results.window_variant_total_gb + activationsMemory + cudaOverhead + nonPytorchMemory + otherExpenses;
+                
+                // Расчет фактического объема памяти с учетом GPU Memory Utilization
+                const generalActual = Math.round(generalTotal / gpuMemoryUtilization * 100) / 100;
+                const pagedActual = Math.round(pagedTotal / gpuMemoryUtilization * 100) / 100;
+                const chunkActual = Math.round(chunkTotal / gpuMemoryUtilization * 100) / 100;
+                const windowActual = Math.round(windowTotal / gpuMemoryUtilization * 100) / 100;
+                
+                // Обновление результатов
+                document.getElementById('generalTotal').textContent = `${Math.round(generalTotal * 100) / 100} ГБ`;
+                document.getElementById('generalActual').innerHTML = `Фактически на GPU:<br><span class="actual-gpu-value">${generalActual} ГБ</span>`;
+                
+                document.getElementById('pagedTotal').textContent = `${Math.round(pagedTotal * 100) / 100} ГБ`;
+                document.getElementById('pagedActual').innerHTML = `Фактически на GPU:<br><span class="actual-gpu-value">${pagedActual} ГБ</span>`;
+                
+                document.getElementById('chunkTotal').textContent = `${Math.round(chunkTotal * 100) / 100} ГБ`;
+                document.getElementById('chunkActual').innerHTML = `Фактически на GPU:<br><span class="actual-gpu-value">${chunkActual} ГБ</span>`;
+                
+                document.getElementById('windowTotal').textContent = `${Math.round(windowTotal * 100) / 100} ГБ`;
+                document.getElementById('windowActual').innerHTML = `Фактически на GPU:<br><span class="actual-gpu-value">${windowActual} ГБ</span>`;
+                
+                // Показать/скрыть карточки в зависимости от настроек
+                document.getElementById('chunkCard').style.display = enableChunk ? 'block' : 'none';
+                document.getElementById('windowCard').style.display = enableWindow ? 'block' : 'none';
+                
+                // Отображение детальных вычислений
+                displayDetailedCalculations(results, {
+                    activationsMemory,
+                    cudaOverhead,
+                    nonPytorchMemory,
+                    otherExpenses
+                }, enableChunk, enableWindow);
+                
+                // Обновление диаграммы сравнения
+                updateComparisonChart(results, {
+                    activationsMemory,
+                    cudaOverhead,
+                    nonPytorchMemory,
+                    otherExpenses
+                }, enableChunk, enableWindow);
+                
+                loading.classList.remove('show');
+                resultsContainer.style.display = 'block';
+            }, 500);
+        }
+        
+        function displayDetailedCalculations(results, additional, enableChunk, enableWindow) {
+            const container = document.getElementById('detailedCalculationsContainer');
+            container.innerHTML = '';
+            
+            // Шаг 1: Память под веса
+            if (results.weights_details.formula) {
+                const step = document.createElement('div');
+                step.className = 'step-by-step';
+                
+                step.innerHTML = `
+                    <div class="step-by-step-title">1. Память под веса модели</div>
+                    <div class="section-formula">${results.weights_details.formula}</div>
+                    <div class="step-by-step-content">
+                        <div class="step-item">
+                            <span class="step-number">1</span>
+                            <span class="step-description">Рассчитываем общий объем памяти для хранения параметров модели</span>
+                            <div class="step-calculation">
+                                Общее количество параметров: ${results.weights_details.params.toLocaleString()}<br>
+                                Бит на параметр: ${results.weights_details.bits_per_param}<br>
+                                Байт на параметр: ${results.weights_details.bytes_per_param}<br>
+                                Общий объем в байтах: ${results.weights_details.total_bytes.toLocaleString()}
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.weights_details.result} ГБ
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(step);
+            }
+            
+            // Шаг 2: Общий KV-кэш
+            const step2 = document.createElement('div');
+            step2.className = 'step-by-step';
+            
+            step2.innerHTML = `
+                <div class="step-by-step-title">2. KV-кэш (общий подход)</div>
+                <div class="section-formula">${results.general_kv_details.formula}</div>
+                <div class="step-by-step-content">
+                    <div class="step-item">
+                        <span class="step-number">1</span>
+                        <span class="step-description">Рассчитываем объем памяти для KV-кэша при стандартном подходе</span>
+                        <div class="step-calculation">
+                            MLA множитель: ${results.general_kv_details.mla_factor}<br>
+                            Количество слоев: ${results.general_kv_details.layers}<br>
+                            Количество KV-голов: ${results.general_kv_details.kv_heads}<br>
+                            Размерность головы: ${results.general_kv_details.head_size}<br>
+                            Макс. длина модели: ${results.general_kv_details.model_len.toLocaleString()}<br>
+                            Байт на элемент: ${results.general_kv_details.bytes_per_element}<br>
+                            Макс. кол-во последовательностей: ${results.general_kv_details.max_seqs}
+                        </div>
+                        <div class="step-result-text">
+                            Результат: ${results.general_kv_details.result} ГБ
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(step2);
+            
+            // Шаг 3: Paged KV-кэш
+            const step3 = document.createElement('div');
+            step3.className = 'step-by-step';
+            
+            step3.innerHTML = `
+                <div class="step-by-step-title">3. KV-кэш (Paged Attention)</div>
+                <div class="section-formula">${results.paged_kv_details.formula}</div>
+                <div class="step-by-step-content">
+                    <div class="step-item">
+                        <span class="step-number">1</span>
+                        <span class="step-description">Рассчитываем размер одной "страницы" (блока) KV-кеша для одного слоя в байтах</span>
+                        <div class="step-calculation">
+                            MLA множитель: ${results.paged_kv_details.intermediate_calc.mla_factor}<br>
+                            Размер блока: ${results.paged_kv_details.intermediate_calc.block_size}<br>
+                            Количество KV-голов: ${results.paged_kv_details.intermediate_calc.num_kv_heads}<br>
+                            Размерность головы: ${results.paged_kv_details.intermediate_calc.head_dim}<br>
+                            Байт на элемент: ${results.paged_kv_details.intermediate_calc.bytes_per_element}<br>
+                            <br>
+                            Размер страницы (байт) = MLA множитель × (Размер блока × Количество KV-голов × Размерность головы) × Байт на элемент
+                        </div>
+                        <div class="step-result-text">
+                            Результат: ${results.paged_kv_details.page_size_bytes.toLocaleString()} байт
+                        </div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <span class="step-number">2</span>
+                        <span class="step-description">Рассчитываем количество блоков для покрытия максимальной длины модели</span>
+                        <div class="step-calculation">
+                            Макс. длина модели: ${results.general_kv_details.model_len.toLocaleString()}<br>
+                            Размер блока: ${results.paged_kv_details.intermediate_calc.block_size}<br>
+                            <br>
+                            Количество блоков = ceil(Макс. длина модели / Размер блока)
+                        </div>
+                        <div class="step-result-text">
+                            Результат: ${results.paged_kv_details.total_blocks.toLocaleString()} блоков
+                        </div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <span class="step-number">3</span>
+                        <span class="step-description">Рассчитываем объем памяти для одного слоя</span>
+                        <div class="step-calculation">
+                            Количество блоков: ${results.paged_kv_details.total_blocks.toLocaleString()}<br>
+                            Размер страницы: ${results.paged_kv_details.page_size_bytes.toLocaleString()} байт<br>
+                            <br>
+                            VRAM одного слоя = Количество блоков × Размер страницы в байтах
+                        </div>
+                        <div class="step-result-text">
+                            Результат: ${results.paged_kv_details.vram_one_layer.toLocaleString()} байт
+                        </div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <span class="step-number">4</span>
+                        <span class="step-description">Рассчитываем общий объем памяти для KV-кэша</span>
+                        <div class="step-calculation">
+                            Количество слоев: ${results.paged_kv_details.layers}<br>
+                            VRAM одного слоя: ${results.paged_kv_details.vram_one_layer.toLocaleString()} байт<br>
+                            Макс. кол-во последовательностей: ${results.paged_kv_details.max_seqs}<br>
+                            <br>
+                            Общий объем (байт) = Количество слоев × VRAM одного слоя × Макс. кол-во последовательностей
+                        </div>
+                        <div class="step-result-text">
+                            Результат: ${results.paged_kv_details.result} ГБ
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(step3);
+            
+            // Шаг 4: Chunk Attention
+            if (enableChunk && results.chunk_details.formula) {
+                const step4 = document.createElement('div');
+                step4.className = 'step-by-step';
+                
+                step4.innerHTML = `
+                    <div class="step-by-step-title">4. Chunk Attention</div>
+                    <div class="section-formula">${results.chunk_details.formula}</div>
+                    <div class="step-by-step-content">
+                        <div class="step-item">
+                            <span class="step-number">1</span>
+                            <span class="step-description">Рассчитываем объем памяти для слоев с полным вниманием</span>
+                            <div class="step-calculation">
+                                Количество слоев с полным вниманием: ${results.chunk_details.full_layers}<br>
+                                VRAM одного слоя: ${results.chunk_details.vram_one_layer.toLocaleString()} байт<br>
+                                Макс. кол-во последовательностей: ${results.chunk_details.max_seqs}<br>
+                                <br>
+                                Объем памяти (байт) = Количество слоев с полным вниманием × VRAM одного слоя × Макс. кол-во последовательностей
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.chunk_details.full_part_gb} ГБ
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">2</span>
+                            <span class="step-description">Рассчитываем количество токенов для хранения в кэше чанкового внимания</span>
+                            <div class="step-calculation">
+                                Размер чанка: ${results.chunk_details.chunk_size.toLocaleString()}<br>
+                                Макс. токенов в батче: ${results.chunk_details.max_batched_tokens.toLocaleString()}<br>
+                                Макс. длина модели: ${results.chunk_details.model_len.toLocaleString()}<br>
+                                <br>
+                                Количество токенов = min(Размер чанка + Макс. токенов в батче, Макс. длина модели)
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${Math.min(results.chunk_details.chunk_size + results.chunk_details.max_batched_tokens, results.chunk_details.model_len).toLocaleString()} токенов
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">3</span>
+                            <span class="step-description">Рассчитываем количество блоков для хранения токенов чанкового внимания</span>
+                            <div class="step-calculation">
+                                Количество токенов: ${Math.min(results.chunk_details.chunk_size + results.chunk_details.max_batched_tokens, results.chunk_details.model_len).toLocaleString()}<br>
+                                Размер блока: ${results.chunk_details.block_size}<br>
+                                <br>
+                                Количество блоков = ceil(Количество токенов / Размер блока)
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.chunk_details.num_blocks_chunk.toLocaleString()} блоков
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">4</span>
+                            <span class="step-description">Рассчитываем объем памяти для одного слоя чанкового внимания</span>
+                            <div class="step-calculation">
+                                Количество блоков: ${results.chunk_details.num_blocks_chunk.toLocaleString()}<br>
+                                Размер страницы: ${results.chunk_details.page_size_bytes.toLocaleString()} байт<br>
+                                <br>
+                                VRAM одного слоя = Количество блоков × Размер страницы в байтах
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${(results.chunk_details.num_blocks_chunk * results.chunk_details.page_size_bytes).toLocaleString()} байт
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">5</span>
+                            <span class="step-description">Рассчитываем общий объем памяти для слоев с чанковым вниманием</span>
+                            <div class="step-calculation">
+                                Количество слоев с чанковым вниманием: ${results.chunk_details.chunk_layers}<br>
+                                VRAM одного слоя: ${(results.chunk_details.num_blocks_chunk * results.chunk_details.page_size_bytes).toLocaleString()} байт<br>
+                                Макс. кол-во последовательностей: ${results.chunk_details.max_seqs}<br>
+                                <br>
+                                Объем памяти (байт) = Количество слоев с чанковым вниманием × VRAM одного слоя × Макс. кол-во последовательностей
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.chunk_details.chunk_part_gb} ГБ
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">6</span>
+                            <span class="step-description">Рассчитываем общий объем памяти для Chunk Attention</span>
+                            <div class="step-calculation">
+                                Память для слоев с полным вниманием: ${results.chunk_details.full_part_gb} ГБ<br>
+                                Память для слоев с чанковым вниманием: ${results.chunk_details.chunk_part_gb} ГБ<br>
+                                <br>
+                                Итого = Память для слоев с полным вниманием + Память для слоев с чанковым вниманием
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.chunk_details.total_gb} ГБ
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(step4);
+            }
+            
+            // Шаг 5: Sliding Window
+            if (enableWindow && results.window_details.formula) {
+                const step5 = document.createElement('div');
+                step5.className = 'step-by-step';
+                
+                step5.innerHTML = `
+                    <div class="step-by-step-title">5. Sliding Window Attention</div>
+                    <div class="section-formula">${results.window_details.formula}</div>
+                    <div class="step-by-step-content">
+                        <div class="step-item">
+                            <span class="step-number">1</span>
+                            <span class="step-description">Рассчитываем объем памяти для слоев с полным вниманием</span>
+                            <div class="step-calculation">
+                                Количество слоев с полным вниманием: ${results.window_details.full_layers}<br>
+                                VRAM одного слоя: ${results.window_details.vram_one_layer.toLocaleString()} байт<br>
+                                Макс. кол-во последовательностей: ${results.window_details.max_seqs}<br>
+                                <br>
+                                Объем памяти (байт) = Количество слоев с полным вниманием × VRAM одного слоя × Макс. кол-во последовательностей
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.window_details.full_part_gb} ГБ
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">2</span>
+                            <span class="step-description">Рассчитываем количество токенов для хранения в кэше скользящего окна</span>
+                            <div class="step-calculation">
+                                Размер окна: ${results.window_details.window_size.toLocaleString()}<br>
+                                Макс. токенов в батче: ${results.window_details.max_batched_tokens.toLocaleString()}<br>
+                                Макс. длина модели: ${results.window_details.model_len.toLocaleString()}<br>
+                                <br>
+                                Количество токенов = min(Размер окна - 1 + Макс. токенов в батче, Макс. длина модели)
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${Math.min(results.window_details.window_size - 1 + results.window_details.max_batched_tokens, results.window_details.model_len).toLocaleString()} токенов
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">3</span>
+                            <span class="step-description">Рассчитываем количество блоков для хранения токенов скользящего окна</span>
+                            <div class="step-calculation">
+                                Количество токенов: ${Math.min(results.window_details.window_size - 1 + results.window_details.max_batched_tokens, results.window_details.model_len).toLocaleString()}<br>
+                                Размер блока: ${results.window_details.block_size}<br>
+                                <br>
+                                Количество блоков = ceil(Количество токенов / Размер блока)
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.window_details.num_blocks_sliding.toLocaleString()} блоков
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">4</span>
+                            <span class="step-description">Рассчитываем объем памяти для одного слоя скользящего окна</span>
+                            <div class="step-calculation">
+                                Количество блоков: ${results.window_details.num_blocks_sliding.toLocaleString()}<br>
+                                Размер страницы: ${results.window_details.page_size_bytes.toLocaleString()} байт<br>
+                                <br>
+                                VRAM одного слоя = Количество блоков × Размер страницы в байтах
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${(results.window_details.num_blocks_sliding * results.window_details.page_size_bytes).toLocaleString()} байт
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">5</span>
+                            <span class="step-description">Рассчитываем общий объем памяти для слоев со скользящим окном</span>
+                            <div class="step-calculation">
+                                Количество слоев со скользящим окном: ${results.window_details.sliding_layers}<br>
+                                VRAM одного слоя: ${(results.window_details.num_blocks_sliding * results.window_details.page_size_bytes).toLocaleString()} байт<br>
+                                Макс. кол-во последовательностей: ${results.window_details.max_seqs}<br>
+                                <br>
+                                Объем памяти (байт) = Количество слоев со скользящим окном × VRAM одного слоя × Макс. кол-во последовательностей
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.window_details.sliding_part_gb} ГБ
+                            </div>
+                        </div>
+                        
+                        <div class="step-item">
+                            <span class="step-number">6</span>
+                            <span class="step-description">Рассчитываем общий объем памяти для Sliding Window Attention</span>
+                            <div class="step-calculation">
+                                Память для слоев с полным вниманием: ${results.window_details.full_part_gb} ГБ<br>
+                                Память для слоев со скользящим окном: ${results.window_details.sliding_part_gb} ГБ<br>
+                                <br>
+                                Итого = Память для слоев с полным вниманием + Память для слоев со скользящим окном
+                            </div>
+                            <div class="step-result-text">
+                                Результат: ${results.window_details.total_gb} ГБ
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(step5);
+            }
+            
+            // Шаг 6: Дополнительные параметры
+            const step6 = document.createElement('div');
+            step6.className = 'step-by-step';
+            
+            step6.innerHTML = `
+                <div class="step-by-step-title">6. Дополнительные параметры VRAM</div>
+                <div class="section-formula">Дополнительная память (ГБ) = Активации + CUDA накладные + Не-PyTorch + Прочее</div>
+                <div class="step-by-step-content">
+                    <div class="step-item">
+                        <span class="step-number">1</span>
+                        <span class="step-description">Рассчитываем общий объем дополнительной памяти</span>
+                        <div class="step-calculation">
+                            Активации: ${additional.activationsMemory} ГБ<br>
+                            CUDA накладные: ${additional.cudaOverhead} ГБ<br>
+                            Не-PyTorch: ${additional.nonPytorchMemory} ГБ<br>
+                            Прочее: ${additional.otherExpenses} ГБ<br>
+                            <br>
+                            Итого = Активации + CUDA накладные + Не-PyTorch + Прочее
+                        </div>
+                        <div class="step-result-text">
+                            Результат: ${(additional.activationsMemory + additional.cudaOverhead + additional.nonPytorchMemory + additional.otherExpenses).toFixed(2)} ГБ
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(step6);
+        }
+        
+        function updateComparisonChart(results, additional, enableChunk, enableWindow) {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+            
+            // Формируем данные для графика в зависимости от включенных опций
+            const labels = ['Общий подход', 'Paged Attention'];
+            const weightsData = [results.weights_gb, results.weights_gb];
+            const kvCacheData = [results.general_kv_cache_gb, results.paged_kv_cache_gb];
+            const activationsData = [additional.activationsMemory, additional.activationsMemory];
+            const cudaData = [additional.cudaOverhead, additional.cudaOverhead];
+            const nonPytorchData = [additional.nonPytorchMemory, additional.nonPytorchMemory];
+            const otherData = [additional.otherExpenses, additional.otherExpenses];
+            
+            if (enableChunk) {
+                labels.push('Chunk Attention');
+                weightsData.push(results.weights_gb);
+                kvCacheData.push(results.chunk_variant_total_gb);
+                activationsData.push(additional.activationsMemory);
+                cudaData.push(additional.cudaOverhead);
+                nonPytorchData.push(additional.nonPytorchMemory);
+                otherData.push(additional.otherExpenses);
+            }
+            
+            if (enableWindow) {
+                labels.push('Sliding Window');
+                weightsData.push(results.weights_gb);
+                kvCacheData.push(results.window_variant_total_gb);
+                activationsData.push(additional.activationsMemory);
+                cudaData.push(additional.cudaOverhead);
+                nonPytorchData.push(additional.nonPytorchMemory);
+                otherData.push(additional.otherExpenses);
+            }
+            
+            const data = {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Веса модели',
+                        data: weightsData,
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'KV-кэш',
+                        data: kvCacheData,
+                        backgroundColor: 'rgba(118, 75, 162, 0.8)',
+                        borderColor: 'rgba(118, 75, 162, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Активации',
+                        data: activationsData,
+                        backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'CUDA накладные',
+                        data: cudaData,
+                        backgroundColor: 'rgba(50, 205, 50, 0.8)',
+                        borderColor: 'rgba(50, 205, 50, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Не-PyTorch',
+                        data: nonPytorchData,
+                        backgroundColor: 'rgba(255, 206, 86, 0.8)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Прочее',
+                        data: otherData,
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            };
+            
+            comparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            bottom: 60 // Увеличиваем отступ снизу для графика
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20, // Увеличиваем отступы между элементами легенды
+                                font: {
+                                    size: 12
+                                },
+                                boxWidth: 15 // Уменьшаем размер квадратиков легенды
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y} ГБ`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Память (ГБ)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function resetForm() {
+            document.getElementById('numLayers').value = 48;
+            document.getElementById('numKvHeads').value = 8;
+            document.getElementById('headDim').value = 128;
+            document.getElementById('maxModelLen').value = 250000;
+            document.getElementById('totalParams').value = 109000000000;
+            document.getElementById('quantType').value = 4;
+            document.getElementById('maxNumSeqs').value = 1;
+            document.getElementById('useMla').value = 2;
+            document.getElementById('blockSize').value = 16;
+            document.getElementById('chunkFullLayers').value = 12;
+            document.getElementById('chunkChunkLayers').value = 36;
+            document.getElementById('chunkSize').value = 8192;
+            document.getElementById('chunkMaxTokens').value = 8192;
+            document.getElementById('windowFullLayers').value = 10;
+            document.getElementById('windowSlidingLayers').value = 38;
+            document.getElementById('windowSize').value = 1024;
+            document.getElementById('windowMaxTokens').value = 8192;
+            document.getElementById('activationsMemory').value = 0;
+            document.getElementById('cudaOverhead').value = 0;
+            document.getElementById('nonPytorchMemory').value = 0;
+            document.getElementById('otherExpenses').value = 0;
+            document.getElementById('gpuMemoryUtilization').value = 0.9;
+            document.getElementById('enableChunk').checked = true;
+            document.getElementById('enableWindow').checked = true;
+            
+            document.getElementById('resultsContainer').style.display = 'none';
+            document.getElementById('gpuUtilizationInfo').style.display = 'none';
+            
+            if (comparisonChart) {
+                comparisonChart.destroy();
+                comparisonChart = null;
+            }
+        }
+        
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            // Автоматический расчет при загрузке
+            calculate();
+        });
+    </script>
+</body>
+</html>
