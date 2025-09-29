@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Config Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+        }
+        .panel {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .left-panel {
+            border-right: 1px solid #ccc;
+        }
+        .middle-panel {
+            border-right: 1px solid #ccc;
+        }
+        .json-input-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-title {
+            margin-bottom: 15px;
+            color: #343a40;
+        }
+        textarea {
+            width: 100%;
+            height: 100%;
+            margin-bottom: 10px;
+            resize: none;
+            font-family: monospace;
+        }
+        .filter-input {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .apply-button {
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+        .apply-button:hover {
+            background-color: #0056b3;
+        }
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .filter-tag {
+            display: flex;
+            align-items: center;
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .filter-tag button {
+            background: none;
+            border: none;
+            color: #dc3545;
+            margin-left: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .output {
+            flex: 1;
+            overflow: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid #ccc;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        .list-view {
+            margin-top: 10px;
+        }
+        .view-toggle {
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .view-toggle button {
+            flex: 1;
+            margin: 0 5px;
+            padding: 8px;
+            border: none;
+            background-color: #6c757d;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .view-toggle button.active {
+            background-color: #007BFF;
+        }
+        .json-view {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .filter-section {
+            margin-bottom: 20px;
+        }
+        .filter-add {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .filter-add input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .filter-add button {
+            padding: 8px 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .empty-message {
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .json-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .clear-button {
+            padding: 10px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .clear-button:hover {
+            background-color: #c82333;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px;
+            background-color: #28a745;
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+        }
+        .sort-dropdown {
+            position: relative;
+            margin-bottom: 15px;
+        }
+        .sort-button {
+            padding: 8px 15px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+        .sort-button:after {
+            content: '▼';
+            margin-left: 10px;
+            font-size: 12px;
+        }
+        .sort-dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 4px;
+            margin-top: 2px;
+            width: 100%;
+        }
+        .sort-dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            text-align: left;
+        }
+        .sort-dropdown-content a:hover {
+            background-color: #ddd;
+        }
+        .sort-dropdown:hover .sort-button {
+            background-color: #555;
+        }
+        .sort-dropdown:hover .sort-dropdown-content {
+            display: block;
+        }
+        .sort-option.active {
+            background-color: #007BFF;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="panel left-panel">
+        <h2 class="panel-title">JSON Input</h2>
+        <div class="json-input-container">
+            <div class="json-actions">
+                <button class="clear-button" onclick="clearJsonInput()">Clear</button>
+            </div>
+            <textarea id="jsonInput" placeholder="Paste your JSON here..."></textarea>
+        </div>
+    </div>
+    <div class="panel middle-panel">
+        <h2 class="panel-title">Filter Settings</h2>
+        <div class="filter-section">
+            <div class="filter-add">
+                <input type="text" id="newFilter" class="filter-input" placeholder="Enter a key to filter">
+                <button onclick="addFilter()">Add Filter</button>
+            </div>
+            <div id="filterTags" class="filter-tags"></div>
+            <button class="apply-button" onclick="applyFilters()">Apply Filters</button>
+        </div>
+    </div>
+    <div class="panel right-panel">
+        <h2 class="panel-title">Results</h2>
+        <!-- Sort dropdown moved here after the title -->
+        <div class="sort-dropdown">
+            <button class="sort-button" id="sortButton">Sort By: Order ▼</button>
+            <div class="sort-dropdown-content">
+                <a href="#" class="sort-option active" data-sort="order">Sort by Filter Order</a>
+                <a href="#" class="sort-option" data-sort="alpha">Sort Alphabetically</a>
+                <a href="#" class="sort-option" data-sort="value">Sort by Value</a>
+            </div>
+        </div>
+        
+        <div class="view-toggle">
+            <button id="textViewBtn" class="active" onclick="setView('text')">Text</button>
+            <button id="tableViewBtn" onclick="setView('table')">Table</button>
+            <button id="jsonViewBtn" onclick="setView('json')">JSON</button>
+        </div>
+        
+        <div class="output">
+            <div id="listView" class="list-view" style="display: block;"></div>
+            <table id="tableView" style="display: none;"></table>
+            <div id="jsonView" class="json-view" style="display: none;"></div>
+        </div>
+    </div>
+    <div id="notification" class="notification"></div>
+    <script>
+        let currentView = 'text';
+        let jsonData = null;
+        let filters = [];
+        let currentSortOrder = 'order'; // Default sort order
+        // Initialize the filter tags
+        updateFilterTags();
+        // Function to show notification
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.backgroundColor = type === 'success' ? '#28a745' : '#dc3545';
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+        function clearJsonInput() {
+            document.getElementById('jsonInput').value = '';
+            jsonData = null;
+            displayFilteredData(null);
+            showNotification('JSON input cleared');
+        }
+        function addFilter() {
+            const newFilterInput = document.getElementById('newFilter');
+            const newFilter = newFilterInput.value.trim();
+            
+            if (newFilter && !filters.includes(newFilter)) {
+                filters.push(newFilter);
+                updateFilterTags();
+                newFilterInput.value = '';
+            }
+        }
+        function removeFilter(filter) {
+            filters = filters.filter(f => f !== filter);
+            updateFilterTags();
+        }
+        function updateFilterTags() {
+            const filterTagsContainer = document.getElementById('filterTags');
+            filterTagsContainer.innerHTML = '';
+            
+            if (filters.length === 0) {
+                filterTagsContainer.innerHTML = '<div class="empty-message">No filters added yet</div>';
+                return;
+            }
+            
+            filters.forEach(filter => {
+                const tag = document.createElement('div');
+                tag.className = 'filter-tag';
+                tag.innerHTML = `
+                    ${filter}
+                    <button onclick="removeFilter('${filter}')">×</button>
+                `;
+                filterTagsContainer.appendChild(tag);
+            });
+        }
+        function setSortOrder(order) {
+            currentSortOrder = order;
+            
+            // Update active button in dropdown
+            const sortOptions = document.querySelectorAll('.sort-option');
+            sortOptions.forEach(option => {
+                option.classList.remove('active');
+                if (option.getAttribute('data-sort') === order) {
+                    option.classList.add('active');
+                }
+            });
+            
+            // Update button text
+            const sortButton = document.getElementById('sortButton');
+            sortButton.textContent = `Sort By: ${order === 'order' ? 'Order' : order === 'alpha' ? 'Alphabetically' : 'Value'} ▼`;
+            
+            if (jsonData) {
+                const filteredData = filterJsonDeep(jsonData, filters);
+                displayFilteredData(filteredData);
+            }
+        }
+        function applyFilters() {
+            try {
+                const jsonInput = document.getElementById('jsonInput').value.trim();
+                
+                if (!jsonInput) {
+                    jsonData = null;
+                    displayFilteredData(null);
+                    showNotification('Please enter JSON data first', 'error');
+                    return;
+                }
+                
+                jsonData = JSON.parse(jsonInput);
+                const filteredData = filterJsonDeep(jsonData, filters);
+                displayFilteredData(filteredData);
+                showNotification('Filters applied successfully');
+            } catch (e) {
+                showNotification('Invalid JSON: ' + e.message, 'error');
+            }
+        }
+        // Function to filter JSON with deep search
+        function filterJsonDeep(data, keys) {
+            if (!keys || keys.length === 0) {
+                return data; // Return original data if no filters
+            }
+            
+            // Create a deep copy of the data
+            const result = JSON.parse(JSON.stringify(data));
+            
+            // Function to recursively filter the object
+            function filterObject(obj) {
+                // Create a new object to store filtered results
+                const filtered = {};
+                
+                // Check each key in the object
+                for (const key in obj) {
+                    if (keys.includes(key)) {
+                        // If the key is in our filter list, include it
+                        filtered[key] = obj[key];
+                    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                        // If the value is an object, recursively filter it
+                        const nested = filterObject(obj[key]);
+                        // Only add the nested object if it contains filtered keys
+                        if (Object.keys(nested).length > 0) {
+                            filtered[key] = nested;
+                        }
+                    }
+                }
+                
+                return filtered;
+            }
+            
+            return filterObject(result);
+        }
+        function displayFilteredData(data) {
+            const listView = document.getElementById('listView');
+            const tableView = document.getElementById('tableView');
+            const jsonView = document.getElementById('jsonView');
+            
+            listView.innerHTML = '';
+            tableView.innerHTML = '';
+            jsonView.innerHTML = '';
+            
+            if (!data) {
+                listView.innerHTML = '<div class="empty-message">No JSON data available</div>';
+                tableView.innerHTML = '<tr><td colspan="2" class="empty-message">No JSON data available</td></tr>';
+                jsonView.innerHTML = 'No JSON data available';
+                return;
+            }
+            
+            if (Object.keys(data).length === 0) {
+                listView.innerHTML = '<div class="empty-message">No matching keys found or no filters applied</div>';
+                tableView.innerHTML = '<tr><td colspan="2" class="empty-message">No matching keys found or no filters applied</td></tr>';
+                jsonView.innerHTML = 'No matching keys found or no filters applied';
+            } else {
+                // Collect all items with their paths, keys, and values
+                const items = [];
+                
+                function collectItems(obj, path = '') {
+                    for (const key in obj) {
+                        const value = obj[key];
+                        const currentPath = path ? `${path}.${key}` : key;
+                        
+                        if (typeof value === 'object' && value !== null) {
+                            collectItems(value, currentPath);
+                        } else {
+                            items.push({
+                                path: currentPath,
+                                key: key,
+                                value: value
+                            });
+                        }
+                    }
+                }
+                
+                collectItems(data);
+                
+                // Sort items based on the current sort order
+                let sortedItems = [...items];
+                
+                if (currentSortOrder === 'order') {
+                    // Sort by the order filters were added
+                    sortedItems.sort((a, b) => {
+                        const aIndex = filters.indexOf(a.key);
+                        const bIndex = filters.indexOf(b.key);
+                        return aIndex - bIndex;
+                    });
+                } else if (currentSortOrder === 'alpha') {
+                    // Sort alphabetically by key
+                    sortedItems.sort((a, b) => a.key.localeCompare(b.key));
+                } else if (currentSortOrder === 'value') {
+                    // Sort by value (try to convert to comparable types)
+                    sortedItems.sort((a, b) => {
+                        const aValue = a.value;
+                        const bValue = b.value;
+                        
+                        // Try to convert to number if possible
+                        const aNum = !isNaN(aValue) ? parseFloat(aValue) : aValue;
+                        const bNum = !isNaN(bValue) ? parseFloat(bValue) : bValue;
+                        
+                        if (typeof aNum === 'number' && typeof bNum === 'number') {
+                            return aNum - bNum;
+                        }
+                        
+                        // Fall back to string comparison
+                        return String(aValue).localeCompare(String(bValue));
+                    });
+                }
+                
+                // For text view
+                sortedItems.forEach(item => {
+                    listView.innerHTML += `<p><strong>${item.path}:</strong> ${item.value}</p>`;
+                });
+                
+                // For table view
+                sortedItems.forEach(item => {
+                    const row = document.createElement('tr');
+                    const pathCell = document.createElement('td');
+                    const valueCell = document.createElement('td');
+                    
+                    pathCell.textContent = item.path;
+                    valueCell.textContent = item.value;
+                    
+                    row.appendChild(pathCell);
+                    row.appendChild(valueCell);
+                    tableView.appendChild(row);
+                });
+                
+                // For JSON view
+                jsonView.innerHTML = JSON.stringify(data, null, 2);
+            }
+            
+            if (currentView === 'text') {
+                listView.style.display = 'block';
+                tableView.style.display = 'none';
+                jsonView.style.display = 'none';
+            } else if (currentView === 'table') {
+                listView.style.display = 'none';
+                tableView.style.display = 'table';
+                jsonView.style.display = 'none';
+            } else if (currentView === 'json') {
+                listView.style.display = 'none';
+                tableView.style.display = 'none';
+                jsonView.style.display = 'block';
+            }
+        }
+        function setView(view) {
+            currentView = view;
+            document.getElementById('textViewBtn').classList.remove('active');
+            document.getElementById('tableViewBtn').classList.remove('active');
+            document.getElementById('jsonViewBtn').classList.remove('active');
+            document.getElementById(view + 'ViewBtn').classList.add('active');
+            
+            if (jsonData) {
+                const filteredData = filterJsonDeep(jsonData, filters);
+                displayFilteredData(filteredData);
+            }
+        }
+        // Initialize sort dropdown
+        document.addEventListener('DOMContentLoaded', function() {
+            const sortOptions = document.querySelectorAll('.sort-option');
+            sortOptions.forEach(option => {
+                option.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const sortType = this.getAttribute('data-sort');
+                    setSortOrder(sortType);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
